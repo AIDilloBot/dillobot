@@ -105,6 +105,24 @@ if (claudeCodeAvailable) {
 
 ---
 
+## DilloBot Branding
+
+### 6. CLI Alias
+
+**File:** `package.json`
+
+**bin section must include:**
+```json
+"bin": {
+  "openclaw": "openclaw.mjs",
+  "dillobot": "openclaw.mjs"
+}
+```
+
+**Why:** Provides `dillobot` command as an alias for users.
+
+---
+
 ## Security Module
 
 **Directory:** `src/security-hardening/`
@@ -132,3 +150,4 @@ After any upstream sync, verify:
 8. [ ] `/src/agents/claude-code-sdk-auth.ts` exists
 9. [ ] `/src/agents/claude-code-sdk-runner.ts` exists
 10. [ ] `/src/config/types.security.ts` exists
+11. [ ] `dillobot` CLI alias in package.json bin section

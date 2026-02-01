@@ -113,6 +113,16 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 8: DilloBot CLI alias
+echo ""
+echo "Checking DilloBot CLI alias..."
+if grep -q '"dillobot"' package.json 2>/dev/null; then
+    echo "✅ dillobot CLI alias present in package.json"
+else
+    echo "⚠️  WARNING: dillobot CLI alias missing from package.json"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Summary
 echo ""
 echo "=================================="
