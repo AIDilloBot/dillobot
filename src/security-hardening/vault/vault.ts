@@ -11,12 +11,12 @@
 import os from "node:os";
 import type { SecureVault, VaultBackend } from "../types.js";
 
-// Declare keytar as optional module (installed separately for native keychain support)
-declare module "keytar" {
-  export function setPassword(service: string, account: string, password: string): Promise<void>;
-  export function getPassword(service: string, account: string): Promise<string | null>;
-  export function deletePassword(service: string, account: string): Promise<boolean>;
-  export function findCredentials(service: string): Promise<Array<{ account: string; password: string }>>;
+// Keytar interface for optional native keychain support
+interface KeytarModule {
+  setPassword(service: string, account: string, password: string): Promise<void>;
+  getPassword(service: string, account: string): Promise<string | null>;
+  deletePassword(service: string, account: string): Promise<boolean>;
+  findCredentials(service: string): Promise<Array<{ account: string; password: string }>>;
 }
 
 /**
@@ -124,10 +124,12 @@ export async function createVault(
  */
 async function createKeychainVault(): Promise<SecureVault> {
   // Dynamic import to avoid requiring keytar on all platforms
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let keytar: any;
+  let keytar: KeytarModule;
   try {
-    keytar = await import("keytar");
+    // Dynamic import with module name as variable to bypass TypeScript module resolution
+    // keytar is an optional dependency for native keychain support
+    const moduleName = "keytar";
+    keytar = (await import(moduleName)) as KeytarModule;
   } catch {
     console.warn("[DilloBot Vault] keytar not available, falling back to AES vault");
     return createAesFallbackVault();
