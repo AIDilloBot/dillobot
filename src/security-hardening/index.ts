@@ -4,7 +4,7 @@
  * This module provides security enhancements for OpenClaw:
  * - Encrypted credential vault (OS keychain + AES fallback)
  * - Prompt injection detection and filtering
- * - Skill verification with checksums and signatures
+ * - LLM-based skill inspection before installation
  * - Security policy enforcement
  * - Mandatory challenge-response authentication
  *
@@ -31,11 +31,27 @@ export {
   getDefaultInjectionConfig,
 } from "./injection/injection-filter.js";
 export { filterOutput, getDefaultOutputConfig } from "./injection/output-filter.js";
-export { logInjectionAttempt, logOutputFiltered, emitSecurityAuditEvent } from "./injection/injection-audit.js";
+export {
+  logInjectionAttempt,
+  logOutputFiltered,
+  emitSecurityAuditEvent,
+} from "./injection/injection-audit.js";
 
-// Skill verification
-export { verifySkill, computeSkillChecksum } from "./skills/skill-verification.js";
-export { loadChecksumStore, saveChecksumStore } from "./skills/checksum-store.js";
+// Skill inspection (LLM-based)
+export {
+  verifySkillForInstallation,
+  clearVerificationCache,
+  trustSkill,
+  untrustSkill,
+  inspectSkill,
+  quickSecurityCheck,
+  formatInspectionResults,
+  DEFAULT_VERIFICATION_CONFIG,
+  type SkillVerificationResult,
+  type SkillVerificationConfig,
+  type SkillInstallDecision,
+  type InspectionLLMProvider,
+} from "./skills/skill-verification.js";
 
 // Challenge-response auth
 export { generateChallenge, verifyChallenge } from "./auth/challenge-response.js";

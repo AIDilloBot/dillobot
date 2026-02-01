@@ -86,6 +86,21 @@ if [ -d "src/security-hardening" ]; then
             ERRORS=$((ERRORS + 1))
         fi
     done
+
+    # Check skill inspector (LLM-based inspection)
+    if [ -f "src/security-hardening/skills/skill-inspector.ts" ]; then
+        echo "   ✅ skills/skill-inspector.ts (LLM-based inspection)"
+    else
+        echo "   ❌ skills/skill-inspector.ts missing (LLM-based inspection)"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if [ -f "src/security-hardening/skills/skill-verification.ts" ]; then
+        echo "   ✅ skills/skill-verification.ts"
+    else
+        echo "   ❌ skills/skill-verification.ts missing"
+        ERRORS=$((ERRORS + 1))
+    fi
 else
     echo "❌ CRITICAL: security-hardening module missing!"
     ERRORS=$((ERRORS + 1))

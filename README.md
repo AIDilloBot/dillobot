@@ -108,29 +108,44 @@ Output is scanned before delivery. Matches are redacted and logged.
 
 ---
 
-### 5. Skill Verification
+### 5. LLM-Based Skill Inspection
 
-Skills are verified before loading to prevent tampering:
+Skills are analyzed by your LLM before installation to detect malicious content:
 
-**SHA256 Checksums:**
-- Each skill has a known-good checksum
-- Modified skills are rejected or flagged
-- Checksum store at `~/.dillobot/checksums.json`
+**How it works:**
+1. When you install a skill, DilloBot sends it to your LLM for security analysis
+2. The LLM scans for prompt injections, data exfiltration, dangerous commands, etc.
+3. If issues are found, you're shown the findings and asked to approve or reject
+4. Critical issues block installation entirely (no bypass allowed)
 
-**Optional PGP Signatures:**
-- Skills can be signed by trusted publishers
-- Configure trusted signer fingerprints
-- Unsigned skills can be blocked in high-security mode
+**Quick Pre-Check (No LLM needed):**
+Before LLM analysis, a fast pattern scan catches obvious red flags:
+- Instruction override attempts ("ignore previous instructions")
+- Jailbreak patterns ("you are now DAN")
+- Encoded payloads (base64 blocks)
+- Dangerous shell commands (`curl | sh`, `rm -rf /`)
+- Credential access patterns
 
-```typescript
-// Verification result
-{
-  valid: boolean;
-  reason?: "checksum_mismatch" | "signature_invalid" | "key_untrusted";
-  expected?: string;
-  actual?: string;
-}
-```
+**Risk Levels:**
+| Level | Action |
+|-------|--------|
+| None/Low | Auto-approved |
+| Medium | Warning shown, user can bypass |
+| High | Warning shown, user can bypass |
+| Critical | Blocked, no bypass allowed |
+
+**Detection Categories:**
+- `prompt_injection` — Attempts to override AI behavior
+- `data_exfiltration` — Sending data to external services
+- `privilege_escalation` — Gaining elevated access
+- `obfuscated_code` — Hidden/encoded payloads
+- `credential_access` — Reading API keys, tokens
+- `system_command` — Dangerous shell commands
+
+**Trusted Skills:**
+- Bundled skills are trusted by default
+- Add skills to trusted list to skip inspection
+- Inspection results are cached per skill content hash
 
 ---
 
@@ -246,10 +261,11 @@ DilloBot adds a `security` section to your config:
       }
     },
     "skills": {
-      "requireVerification": true,
-      "requireChecksum": true,
-      "requireSignature": false,
-      "trustedSigners": []
+      "inspectBeforeInstall": true,
+      "trustBundledSkills": true,
+      "trustedSkills": [],
+      "quickCheckOnly": false,
+      "blockCritical": true
     },
     "memory": {
       "useSecureBuffers": false,
@@ -303,7 +319,7 @@ This checks:
 - Vault module is complete
 - Injection filter is present
 - Output filter is present
-- Skill verification is present
+- Skill inspector is present
 - All security files exist
 - `dillobot` CLI alias is present
 
@@ -327,8 +343,8 @@ src/security-hardening/
 │   ├── security-policy.ts       # Policy enforcement
 │   └── policy-config.ts         # Policy schema
 ├── skills/
-│   ├── skill-verification.ts    # SHA256 + PGP verification
-│   └── checksum-store.ts        # Known-good checksums
+│   ├── skill-verification.ts    # Verification orchestration
+│   └── skill-inspector.ts       # LLM-based security analysis
 └── vault/
     ├── vault.ts                 # Unified interface
     ├── aes-fallback.ts          # AES-256-GCM encrypted storage

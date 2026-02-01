@@ -130,9 +130,13 @@ if (claudeCodeAvailable) {
 This entire directory is DilloBot-specific and must be preserved. It contains:
 - Encrypted credential vault
 - Prompt injection protection
-- Skill verification
+- LLM-based skill inspection (NOT checksum-based)
 - Security policy enforcement
 - Challenge-response authentication
+
+**Key files:**
+- `skills/skill-inspector.ts` — LLM-based security analysis
+- `skills/skill-verification.ts` — Verification orchestration
 
 ---
 

@@ -1,231 +1,325 @@
 /**
  * DilloBot Skill Verification
  *
- * Provides SHA256 checksum and optional PGP signature verification
- * for skill integrity.
+ * Provides LLM-based security inspection for skills before installation.
+ * Replaces checksum-based verification with intelligent content analysis.
  */
 
+import type { Skill } from "@mariozechner/pi-coding-agent";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { SkillChecksum, SkillVerificationResult } from "../types.js";
-import { logSkillVerificationFailed } from "../injection/injection-audit.js";
+import {
+  type SkillContent,
+  type SkillInspectionResult,
+  type InspectionLLMProvider,
+  inspectSkill,
+  skillToContent,
+  quickSecurityCheck,
+  formatInspectionResults,
+} from "./skill-inspector.js";
 
 /**
- * Compute SHA256 checksum of a skill directory or file.
- *
- * For directories, this computes a hash of all file contents
- * in a deterministic order.
- *
- * @param skillPath Path to skill file or directory
- * @returns SHA256 checksum as hex string
+ * Result of skill verification.
  */
-export async function computeSkillChecksum(skillPath: string): Promise<string> {
-  const stat = await fs.stat(skillPath);
-
-  if (stat.isFile()) {
-    // Single file - hash its contents
-    const content = await fs.readFile(skillPath);
-    return crypto.createHash("sha256").update(content).digest("hex");
-  }
-
-  if (stat.isDirectory()) {
-    // Directory - hash all files in sorted order
-    return computeDirectoryChecksum(skillPath);
-  }
-
-  throw new Error(`Invalid skill path: ${skillPath}`);
+export interface SkillVerificationResult {
+  /** Whether the skill is approved for installation */
+  approved: boolean;
+  /** Whether user explicitly bypassed warnings */
+  bypassed: boolean;
+  /** The inspection result */
+  inspection: SkillInspectionResult;
+  /** Formatted message for display */
+  message: string;
 }
 
 /**
- * Compute checksum for a directory.
+ * User decision callback for skill installation.
  */
-async function computeDirectoryChecksum(dirPath: string): Promise<string> {
-  const hash = crypto.createHash("sha256");
+export type SkillInstallDecision = (
+  skillName: string,
+  inspection: SkillInspectionResult,
+  formattedResults: string,
+) => Promise<"install" | "skip" | "cancel">;
 
-  // Get all files recursively, sorted
-  const files = await getAllFiles(dirPath);
-  files.sort();
-
-  for (const file of files) {
-    // Include relative path in hash for structural integrity
-    const relativePath = path.relative(dirPath, file);
-    hash.update(relativePath);
-
-    // Include file contents
-    const content = await fs.readFile(file);
-    hash.update(content);
-  }
-
-  return hash.digest("hex");
+/**
+ * Configuration for skill verification.
+ */
+export interface SkillVerificationConfig {
+  /** Whether verification is enabled */
+  enabled: boolean;
+  /** LLM provider for inspection */
+  llmProvider?: InspectionLLMProvider;
+  /** Callback for user decisions */
+  onDecisionNeeded?: SkillInstallDecision;
+  /** Skip verification for bundled skills */
+  trustBundledSkills: boolean;
+  /** Skills to always trust (by name) */
+  trustedSkills: string[];
+  /** Skip LLM analysis and only do quick check */
+  quickCheckOnly: boolean;
 }
 
 /**
- * Get all files in a directory recursively.
+ * Default verification config.
  */
-async function getAllFiles(dirPath: string): Promise<string[]> {
-  const files: string[] = [];
-  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+export const DEFAULT_VERIFICATION_CONFIG: SkillVerificationConfig = {
+  enabled: true,
+  trustBundledSkills: true,
+  trustedSkills: [],
+  quickCheckOnly: false,
+};
 
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
+/**
+ * In-memory cache of verified skills (by content hash).
+ */
+const verifiedSkillsCache = new Map<string, SkillVerificationResult>();
 
-    if (entry.isDirectory()) {
-      // Skip hidden directories and node_modules
-      if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
-        files.push(...(await getAllFiles(fullPath)));
-      }
-    } else if (entry.isFile()) {
-      // Skip hidden files
-      if (!entry.name.startsWith(".")) {
-        files.push(fullPath);
-      }
-    }
-  }
-
-  return files;
+/**
+ * Compute a hash of skill content for caching.
+ */
+function hashSkillContent(skill: SkillContent): string {
+  const content = JSON.stringify({
+    name: skill.name,
+    prompt: skill.prompt,
+    description: skill.description,
+  });
+  return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
 /**
- * Verify a skill against its expected checksum.
+ * Check if a skill is in the trusted list.
+ */
+function isSkillTrusted(skillName: string, config: SkillVerificationConfig): boolean {
+  return config.trustedSkills.some((trusted) => trusted.toLowerCase() === skillName.toLowerCase());
+}
+
+/**
+ * Check if a skill path indicates it's a bundled skill.
+ */
+function isBundledSkill(sourcePath?: string): boolean {
+  if (!sourcePath) return false;
+  // Bundled skills are typically in node_modules or the package's skills directory
+  return (
+    sourcePath.includes("node_modules") ||
+    sourcePath.includes("/dist/skills/") ||
+    sourcePath.includes("/skills/bundled/")
+  );
+}
+
+/**
+ * Verify a skill before installation.
  *
- * @param skillPath Path to skill file or directory
- * @param expected Expected checksum information
+ * @param skill The skill to verify
+ * @param sourcePath Source path of the skill
+ * @param config Verification configuration
  * @returns Verification result
  */
-export async function verifySkill(skillPath: string, expected: SkillChecksum): Promise<SkillVerificationResult> {
-  try {
-    // Check if skill exists
-    try {
-      await fs.access(skillPath);
-    } catch {
-      logSkillVerificationFailed({
-        skillKey: expected.skillKey,
-        reason: "not_found",
-      });
-      return {
-        valid: false,
-        reason: "not_found",
-      };
-    }
-
-    // Compute actual checksum
-    const actual = await computeSkillChecksum(skillPath);
-
-    // Compare checksums
-    if (actual !== expected.sha256) {
-      logSkillVerificationFailed({
-        skillKey: expected.skillKey,
-        reason: "checksum_mismatch",
-        expected: expected.sha256,
-        actual,
-      });
-      return {
-        valid: false,
-        reason: "checksum_mismatch",
-        expected: expected.sha256,
-        actual,
-      };
-    }
-
-    // If signature is provided, verify it
-    if (expected.pgpSignature) {
-      const signatureValid = await verifyPgpSignature(skillPath, expected.pgpSignature, expected.signedBy);
-
-      if (!signatureValid) {
-        logSkillVerificationFailed({
-          skillKey: expected.skillKey,
-          reason: "signature_invalid",
-        });
-        return {
-          valid: false,
-          reason: "signature_invalid",
-        };
-      }
-    }
-
-    // All checks passed
+export async function verifySkillForInstallation(
+  skill: Skill,
+  sourcePath: string | undefined,
+  config: SkillVerificationConfig = DEFAULT_VERIFICATION_CONFIG,
+): Promise<SkillVerificationResult> {
+  // Check if verification is disabled
+  if (!config.enabled) {
     return {
-      valid: true,
-      warnings: expected.pgpSignature ? [] : ["Skill has no PGP signature"],
-    };
-  } catch (error) {
-    logSkillVerificationFailed({
-      skillKey: expected.skillKey,
-      reason: "file_read_error",
-      actual: (error as Error).message,
-    });
-    return {
-      valid: false,
-      reason: "file_read_error",
+      approved: true,
+      bypassed: false,
+      inspection: {
+        safe: true,
+        riskLevel: "none",
+        findings: [],
+        summary: "Verification disabled.",
+        bypassAllowed: true,
+      },
+      message: "Skill verification is disabled.",
     };
   }
-}
 
-/**
- * Verify PGP signature of a skill.
- *
- * Note: Full PGP implementation would require a library like openpgp.
- * This is a placeholder that logs a warning.
- *
- * @param skillPath Path to skill
- * @param signature Detached PGP signature (armored)
- * @param signedBy Expected signer key fingerprint
- * @returns true if signature is valid
- */
-async function verifyPgpSignature(skillPath: string, signature: string, signedBy?: string): Promise<boolean> {
-  // TODO: Implement full PGP verification with openpgp library
-  console.warn("[DilloBot Skills] PGP signature verification not yet implemented");
-  console.warn(`[DilloBot Skills] Would verify signature by: ${signedBy ?? "unknown"}`);
+  // Check if skill is trusted
+  if (isSkillTrusted(skill.name, config)) {
+    return {
+      approved: true,
+      bypassed: false,
+      inspection: {
+        safe: true,
+        riskLevel: "none",
+        findings: [],
+        summary: "Skill is in trusted list.",
+        bypassAllowed: true,
+      },
+      message: `Skill "${skill.name}" is trusted.`,
+    };
+  }
 
-  // For now, log and return true to not block skills
-  // In production, this should properly verify signatures
-  return true;
-}
+  // Check if it's a bundled skill and we trust those
+  if (config.trustBundledSkills && isBundledSkill(sourcePath)) {
+    return {
+      approved: true,
+      bypassed: false,
+      inspection: {
+        safe: true,
+        riskLevel: "none",
+        findings: [],
+        summary: "Bundled skill - trusted by default.",
+        bypassAllowed: true,
+      },
+      message: `Skill "${skill.name}" is bundled and trusted.`,
+    };
+  }
 
-/**
- * Generate a skill manifest with checksum.
- *
- * This can be used to create the expected checksum for a skill.
- *
- * @param skillPath Path to skill
- * @param skillKey Skill identifier
- * @returns Checksum manifest
- */
-export async function generateSkillManifest(skillPath: string, skillKey: string): Promise<SkillChecksum> {
-  const sha256 = await computeSkillChecksum(skillPath);
+  // Convert to content for inspection
+  const content = skillToContent(skill, sourcePath);
+  const contentHash = hashSkillContent(content);
+
+  // Check cache
+  const cached = verifiedSkillsCache.get(contentHash);
+  if (cached) {
+    return cached;
+  }
+
+  // Quick security check first (fast, no LLM needed)
+  const quickCheck = quickSecurityCheck(skill.prompt);
+  if (quickCheck.hasRedFlags) {
+    const inspection: SkillInspectionResult = {
+      safe: false,
+      riskLevel: "high",
+      findings: quickCheck.flags.map((flag) => ({
+        type: "suspicious_pattern" as const,
+        severity: "high" as const,
+        description: `Detected red flag: ${flag}`,
+      })),
+      summary: `Quick scan found ${quickCheck.flags.length} security red flag(s).`,
+      bypassAllowed: true,
+    };
+
+    // If no LLM provider or quick check only, return quick check results
+    if (!config.llmProvider || config.quickCheckOnly) {
+      const formattedResults = formatInspectionResults(inspection, skill.name);
+
+      // Ask user if decision callback is provided
+      if (config.onDecisionNeeded && inspection.bypassAllowed) {
+        const decision = await config.onDecisionNeeded(skill.name, inspection, formattedResults);
+
+        const result: SkillVerificationResult = {
+          approved: decision === "install",
+          bypassed: decision === "install",
+          inspection,
+          message: formattedResults,
+        };
+
+        if (result.approved) {
+          verifiedSkillsCache.set(contentHash, result);
+        }
+
+        return result;
+      }
+
+      return {
+        approved: false,
+        bypassed: false,
+        inspection,
+        message: formattedResults,
+      };
+    }
+  }
+
+  // Full LLM inspection
+  if (config.llmProvider) {
+    const inspection = await inspectSkill(content, config.llmProvider);
+    const formattedResults = formatInspectionResults(inspection, skill.name);
+
+    // If safe, approve automatically
+    if (inspection.safe) {
+      const result: SkillVerificationResult = {
+        approved: true,
+        bypassed: false,
+        inspection,
+        message: formattedResults,
+      };
+      verifiedSkillsCache.set(contentHash, result);
+      return result;
+    }
+
+    // Not safe - ask user if callback provided
+    if (config.onDecisionNeeded && inspection.bypassAllowed) {
+      const decision = await config.onDecisionNeeded(skill.name, inspection, formattedResults);
+
+      const result: SkillVerificationResult = {
+        approved: decision === "install",
+        bypassed: decision === "install",
+        inspection,
+        message: formattedResults,
+      };
+
+      if (result.approved) {
+        verifiedSkillsCache.set(contentHash, result);
+      }
+
+      return result;
+    }
+
+    // Critical issues or no callback - block installation
+    return {
+      approved: false,
+      bypassed: false,
+      inspection,
+      message: formattedResults,
+    };
+  }
+
+  // No LLM provider and no red flags in quick check - allow with warning
+  const noLlmInspection: SkillInspectionResult = {
+    safe: true,
+    riskLevel: "low",
+    findings: [],
+    summary: "Quick scan passed. Full LLM analysis not available.",
+    bypassAllowed: true,
+  };
 
   return {
-    skillKey,
-    sha256,
-    verifiedAt: Date.now(),
+    approved: true,
+    bypassed: false,
+    inspection: noLlmInspection,
+    message: `Skill "${skill.name}" passed quick security scan. LLM analysis unavailable.`,
   };
 }
 
 /**
- * Verify multiple skills in parallel.
- *
- * @param skills Array of [skillPath, expected] tuples
- * @returns Map of skill key to verification result
+ * Clear the verification cache.
  */
-export async function verifySkills(
-  skills: Array<[string, SkillChecksum]>,
-): Promise<Map<string, SkillVerificationResult>> {
-  const results = new Map<string, SkillVerificationResult>();
-
-  const verifications = skills.map(async ([skillPath, expected]) => {
-    const result = await verifySkill(skillPath, expected);
-    return [expected.skillKey, result] as const;
-  });
-
-  const settled = await Promise.allSettled(verifications);
-
-  for (const outcome of settled) {
-    if (outcome.status === "fulfilled") {
-      const [key, result] = outcome.value;
-      results.set(key, result);
-    }
-  }
-
-  return results;
+export function clearVerificationCache(): void {
+  verifiedSkillsCache.clear();
 }
+
+/**
+ * Add a skill to the trusted list.
+ */
+export function trustSkill(skillName: string, config: SkillVerificationConfig): void {
+  if (!config.trustedSkills.includes(skillName)) {
+    config.trustedSkills.push(skillName);
+  }
+}
+
+/**
+ * Remove a skill from the trusted list.
+ */
+export function untrustSkill(skillName: string, config: SkillVerificationConfig): void {
+  const index = config.trustedSkills.indexOf(skillName);
+  if (index >= 0) {
+    config.trustedSkills.splice(index, 1);
+  }
+}
+
+// Re-export inspector types and functions
+export {
+  type SkillContent,
+  type SkillInspectionResult,
+  type SkillSecurityFinding,
+  type SkillRiskLevel,
+  type InspectionLLMProvider,
+  inspectSkill,
+  skillToContent,
+  quickSecurityCheck,
+  formatInspectionResults,
+} from "./skill-inspector.js";

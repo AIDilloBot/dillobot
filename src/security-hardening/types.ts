@@ -8,7 +8,12 @@
 // Vault Types
 // =============================================================================
 
-export type VaultBackend = "keychain" | "credential-manager" | "secret-service" | "aes-fallback" | "auto";
+export type VaultBackend =
+  | "keychain"
+  | "credential-manager"
+  | "secret-service"
+  | "aes-fallback"
+  | "auto";
 
 export interface SecureVault {
   /** Store a credential with automatic encryption */
@@ -86,37 +91,48 @@ export interface OutputFilterResult {
 }
 
 // =============================================================================
-// Skill Verification Types
+// Skill Verification Types (LLM-Based Inspection)
 // =============================================================================
 
-export interface SkillChecksum {
-  skillKey: string;
-  sha256: string;
-  pgpSignature?: string;
-  signedBy?: string;
-  verifiedAt?: number;
+export type SkillRiskLevel = "none" | "low" | "medium" | "high" | "critical";
+
+export type SkillFindingType =
+  | "prompt_injection"
+  | "data_exfiltration"
+  | "privilege_escalation"
+  | "obfuscated_code"
+  | "external_communication"
+  | "file_system_access"
+  | "credential_access"
+  | "system_command"
+  | "suspicious_pattern"
+  | "other";
+
+export interface SkillSecurityFinding {
+  type: SkillFindingType;
+  severity: SkillRiskLevel;
+  description: string;
+  snippet?: string;
+  line?: number;
 }
 
-export type SkillVerificationReason =
-  | "checksum_mismatch"
-  | "signature_invalid"
-  | "key_untrusted"
-  | "not_found"
-  | "file_read_error";
-
-export interface SkillVerificationResult {
-  valid: boolean;
-  reason?: SkillVerificationReason;
-  expected?: string;
-  actual?: string;
-  warnings?: string[];
+export interface SkillInspectionResult {
+  safe: boolean;
+  riskLevel: SkillRiskLevel;
+  findings: SkillSecurityFinding[];
+  summary: string;
+  bypassAllowed: boolean;
 }
 
 export interface SkillVerificationConfig {
-  requireVerification: boolean;
-  requireChecksum: boolean;
-  requireSignature: boolean;
-  trustedSigners: string[];
+  /** Enable LLM-based skill inspection */
+  enabled: boolean;
+  /** Trust bundled skills without inspection */
+  trustBundledSkills: boolean;
+  /** Skills to always trust (by name) */
+  trustedSkills: string[];
+  /** Only run quick pattern check, skip LLM analysis */
+  quickCheckOnly: boolean;
 }
 
 // =============================================================================
@@ -142,14 +158,16 @@ export interface CredentialPolicyConfig {
 }
 
 export interface SkillPolicyConfig {
-  /** Require SHA256 verification for skills */
-  requireVerification: boolean;
-  /** Require checksum for all skills (vs just verify if present) */
-  requireChecksum: boolean;
-  /** Require PGP signature for skills */
-  requireSignature: boolean;
-  /** Trusted PGP key fingerprints */
-  trustedSigners: string[];
+  /** Enable LLM-based skill inspection before installation */
+  inspectBeforeInstall: boolean;
+  /** Trust bundled skills without inspection */
+  trustBundledSkills: boolean;
+  /** Skills to always trust (by name) */
+  trustedSkills: string[];
+  /** Only run quick pattern check, skip full LLM analysis */
+  quickCheckOnly: boolean;
+  /** Block skills with critical findings (no bypass allowed) */
+  blockCritical: boolean;
 }
 
 export interface MemoryPolicyConfig {
