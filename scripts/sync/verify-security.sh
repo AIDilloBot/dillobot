@@ -116,6 +116,13 @@ if [ -d "src/security-hardening" ]; then
         echo "   ❌ injection/source-classifier.ts missing"
         ERRORS=$((ERRORS + 1))
     fi
+
+    if [ -f "src/security-hardening/injection/content-security.ts" ]; then
+        echo "   ✅ injection/content-security.ts (unified entry point)"
+    else
+        echo "   ❌ injection/content-security.ts missing (unified entry point)"
+        ERRORS=$((ERRORS + 1))
+    fi
 else
     echo "❌ CRITICAL: security-hardening module missing!"
     ERRORS=$((ERRORS + 1))

@@ -47,6 +47,7 @@ import { deliverOutboundPayloads } from "../../infra/outbound/deliver.js";
 import { getRemoteSkillEligibility } from "../../infra/skills-remote.js";
 import { logWarn } from "../../logger.js";
 import { buildAgentMainSessionKey, normalizeAgentId } from "../../routing/session-key.js";
+import { processContentSecurity, shouldBlockImmediately } from "../../security-hardening/index.js";
 import {
   buildSafeExternalPrompt,
   detectSuspiciousPatterns,
@@ -250,17 +251,59 @@ export async function runCronIsolatedAgentTurn(params: {
   const timeLine = `Current time: ${formattedTime} (${userTimezone})`;
   const base = `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
 
-  // SECURITY: Wrap external hook content with security boundaries to prevent prompt injection
-  // unless explicitly allowed via a dangerous config override.
+  // SECURITY: Process content through DilloBot security pipeline
+  // Uses layered defense: quick pre-filter + source classification + optional LLM analysis
   const isExternalHook = isExternalHookSession(baseSessionKey);
   const allowUnsafeExternalContent =
     agentPayload?.allowUnsafeExternalContent === true ||
     (isGmailHook && params.cfg.hooks?.gmail?.allowUnsafeExternalContent === true);
-  const shouldWrapExternal = isExternalHook && !allowUnsafeExternalContent;
   let commandBody: string;
 
-  if (isExternalHook) {
-    // Log suspicious patterns for security monitoring
+  // DILLOBOT: Enhanced security processing
+  if (isExternalHook && !allowUnsafeExternalContent) {
+    // Quick check for immediate blocking (critical patterns like credentials, exfil URLs)
+    const quickBlock = shouldBlockImmediately(params.message);
+    if (quickBlock.block) {
+      logWarn(
+        `[security] BLOCKED external content due to critical security pattern ` +
+          `(session=${baseSessionKey}): ${quickBlock.reason}`,
+      );
+      // Return early with a safe error message instead of processing malicious content
+      return {
+        status: "error",
+        error: `Security: Content blocked - ${quickBlock.reason}`,
+      };
+    }
+
+    // Run full content security processing (quick filter + wrapping)
+    // Note: LLM analysis is not performed here since we don't have a provider yet.
+    // The LLM analysis can be added when the provider is available in the execution context.
+    const securityResult = await processContentSecurity(
+      params.message,
+      {
+        sessionKey: baseSessionKey,
+        channel: "cron",
+        metadata: { jobId: params.job.id, jobName: params.job.name },
+      },
+      undefined, // LLM provider - could be passed in if available
+      {
+        enabled: true,
+        llmAnalysisEnabled: false, // Disable LLM analysis for now (no provider available here)
+        blockOnCriticalPatterns: true,
+        wrapExternalContent: true,
+        stripUnicode: true,
+        logEvents: true,
+      },
+    );
+
+    // Log warnings if any
+    if (securityResult.hasWarnings) {
+      for (const warning of securityResult.warnings) {
+        logWarn(`[security] ${warning} (session=${baseSessionKey})`);
+      }
+    }
+
+    // Also run legacy pattern detection for backwards compatibility logging
     const suspiciousPatterns = detectSuspiciousPatterns(params.message);
     if (suspiciousPatterns.length > 0) {
       logWarn(
@@ -269,13 +312,11 @@ export async function runCronIsolatedAgentTurn(params: {
           `${suspiciousPatterns.slice(0, 3).join(", ")}`,
       );
     }
-  }
 
-  if (shouldWrapExternal) {
-    // Wrap external content with security boundaries
+    // Use the security-processed content with wrapping
     const hookType = getHookType(baseSessionKey);
     const safeContent = buildSafeExternalPrompt({
-      content: params.message,
+      content: securityResult.processedContent,
       source: hookType,
       jobName: params.job.name,
       jobId: params.job.id,

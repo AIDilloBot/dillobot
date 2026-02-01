@@ -68,6 +68,17 @@ export {
   emitSecurityAuditEvent,
 } from "./injection/injection-audit.js";
 
+// Content security (unified entry point)
+export {
+  processContentSecurity,
+  shouldBlockImmediately,
+  createLLMProvider,
+  DEFAULT_CONTENT_SECURITY_CONFIG,
+  type ContentSecurityResult,
+  type ContentSecurityConfig,
+  type ContentSecurityContext,
+} from "./injection/content-security.js";
+
 // Skill inspection (LLM-based)
 export {
   verifySkillForInstallation,

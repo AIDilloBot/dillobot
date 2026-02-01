@@ -365,6 +365,7 @@ src/security-hardening/
 ├── auth/
 │   └── challenge-response.ts    # Cryptographic auth
 ├── injection/
+│   ├── content-security.ts      # Unified security entry point
 │   ├── injection-filter.ts      # Quick pre-filter (15 critical patterns)
 │   ├── injection-analyzer.ts    # LLM-based semantic analysis
 │   ├── source-classifier.ts     # Content source/trust classification
