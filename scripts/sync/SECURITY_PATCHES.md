@@ -76,7 +76,19 @@ security?: SecurityConfig;
 
 ---
 
-### 5. Claude Code SDK Provider Detection
+### 5. Claude Code SDK as Default Auth
+
+**Files:**
+- `src/commands/onboard-types.ts` — Added `claude-code-sdk` AuthChoice
+- `src/commands/auth-choice-options.ts` — Claude Code SDK as first/recommended option
+- `src/commands/auth-choice.apply.ts` — Claude Code SDK handler registered first
+- `src/commands/auth-choice.apply.claude-code-sdk.ts` — **NEW** Handler for Claude Code SDK
+
+**Why:** DilloBot uses Claude Code SDK as the preferred authentication method. No API keys to manage or leak.
+
+---
+
+### 6. Claude Code SDK Provider Detection
 
 **File:** `src/agents/models-config.providers.ts`
 

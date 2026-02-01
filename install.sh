@@ -69,6 +69,63 @@ ensure_pnpm() {
     echo -e "${SUCCESS}✓${NC} pnpm $(pnpm -v)"
 }
 
+check_claude_code_sdk() {
+    # Check for Claude Code CLI
+    if check_command claude; then
+        echo -e "${SUCCESS}✓${NC} Claude Code CLI detected"
+        return 0
+    fi
+
+    # Check for credential files
+    local cred_paths=(
+        "$HOME/.claude/credentials.json"
+        "$HOME/.claude/auth.json"
+        "$HOME/.config/claude/credentials.json"
+    )
+
+    for cred_path in "${cred_paths[@]}"; do
+        if [[ -f "$cred_path" ]]; then
+            echo -e "${SUCCESS}✓${NC} Claude Code credentials found at ${INFO}${cred_path}${NC}"
+            return 0
+        fi
+    done
+
+    # Check environment variables
+    if [[ -n "${CLAUDE_CODE_SUBSCRIPTION_TOKEN:-}" ]] || \
+       [[ -n "${CLAUDE_CODE_TOKEN:-}" ]] || \
+       [[ -n "${CLAUDE_SUBSCRIPTION_TOKEN:-}" ]]; then
+        echo -e "${SUCCESS}✓${NC} Claude Code token found in environment"
+        return 0
+    fi
+
+    return 1
+}
+
+setup_claude_code_sdk() {
+    echo ""
+    echo -e "${WARN}→${NC} Checking Claude Code SDK..."
+
+    if check_claude_code_sdk; then
+        echo -e "${INFO}i${NC} Claude Code SDK will be used as the default AI provider"
+        export DILLOBOT_AUTH_CHOICE="claude-code-sdk"
+        return 0
+    fi
+
+    echo -e "${WARN}→${NC} Claude Code SDK not detected"
+    echo ""
+    echo -e "  DilloBot works best with Claude Code SDK authentication."
+    echo -e "  This uses your Claude Code subscription - no API keys needed."
+    echo ""
+    echo -e "  To set up Claude Code SDK:"
+    echo -e "    1. Install: ${INFO}npm install -g @anthropic-ai/claude-code${NC}"
+    echo -e "    2. Login:   ${INFO}claude login${NC}"
+    echo -e "    3. Re-run:  ${INFO}./install.sh${NC}"
+    echo ""
+    echo -e "  Or continue with alternative auth methods during onboarding."
+    echo ""
+    return 1
+}
+
 ensure_local_bin() {
     local bin_dir="$HOME/.local/bin"
     if [[ ! -d "$bin_dir" ]]; then
@@ -238,6 +295,9 @@ main() {
     ensure_node
     ensure_pnpm
 
+    # Check for Claude Code SDK (DilloBot's preferred auth method)
+    setup_claude_code_sdk
+
     echo ""
     if [[ "$INSTALL_FROM_LOCAL" == "1" && "$use_git" == "0" ]]; then
         echo -e "${INFO}i${NC} Installing from local source: ${INFO}${REPO_DIR}${NC}"
@@ -270,7 +330,12 @@ main() {
         read -p "Run onboarding now? [Y/n] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            exec "$HOME/.local/bin/dillobot" onboard
+            local onboard_args=()
+            # If Claude Code SDK was detected, pass it as the default auth choice
+            if [[ -n "${DILLOBOT_AUTH_CHOICE:-}" ]]; then
+                onboard_args+=("--auth-choice" "$DILLOBOT_AUTH_CHOICE")
+            fi
+            exec "$HOME/.local/bin/dillobot" onboard "${onboard_args[@]}"
         fi
     fi
 }

@@ -8,6 +8,7 @@ export type AuthChoiceOption = {
 };
 
 export type AuthChoiceGroupId =
+  | "claude-code-sdk"
   | "openai"
   | "anthropic"
   | "google"
@@ -36,17 +37,24 @@ const AUTH_CHOICE_GROUP_DEFS: {
   hint?: string;
   choices: AuthChoice[];
 }[] = [
+  // DILLOBOT: Claude Code SDK is the recommended auth method
   {
-    value: "openai",
-    label: "OpenAI",
-    hint: "Codex OAuth + API key",
-    choices: ["openai-codex", "openai-api-key"],
+    value: "claude-code-sdk",
+    label: "Claude Code SDK",
+    hint: "Recommended - uses your Claude Code subscription",
+    choices: ["claude-code-sdk"],
   },
   {
     value: "anthropic",
     label: "Anthropic",
     hint: "setup-token + API key",
     choices: ["token", "apiKey"],
+  },
+  {
+    value: "openai",
+    label: "OpenAI",
+    hint: "Codex OAuth + API key",
+    choices: ["openai-codex", "openai-api-key"],
   },
   {
     value: "minimax",
@@ -128,6 +136,13 @@ export function buildAuthChoiceOptions(params: {
 }): AuthChoiceOption[] {
   void params.store;
   const options: AuthChoiceOption[] = [];
+
+  // DILLOBOT: Claude Code SDK is the recommended option
+  options.push({
+    value: "claude-code-sdk",
+    label: "Claude Code SDK (Recommended)",
+    hint: "Uses your Claude Code subscription - no API keys needed",
+  });
 
   options.push({
     value: "token",

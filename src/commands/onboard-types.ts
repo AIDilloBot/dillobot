@@ -3,6 +3,8 @@ import type { GatewayDaemonRuntime } from "./daemon-runtime.js";
 
 export type OnboardMode = "local" | "remote";
 export type AuthChoice =
+  // DILLOBOT: Claude Code SDK is the preferred auth method
+  | "claude-code-sdk"
   // Legacy alias for `setup-token` (kept for backwards CLI compatibility).
   | "oauth"
   | "setup-token"

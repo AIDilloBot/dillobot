@@ -4,6 +4,7 @@ import type { WizardPrompter } from "../wizard/prompts.js";
 import type { AuthChoice } from "./onboard-types.js";
 import { applyAuthChoiceAnthropic } from "./auth-choice.apply.anthropic.js";
 import { applyAuthChoiceApiProviders } from "./auth-choice.apply.api-providers.js";
+import { applyAuthChoiceClaudeCodeSdk } from "./auth-choice.apply.claude-code-sdk.js";
 import { applyAuthChoiceCopilotProxy } from "./auth-choice.apply.copilot-proxy.js";
 import { applyAuthChoiceGitHubCopilot } from "./auth-choice.apply.github-copilot.js";
 import { applyAuthChoiceGoogleAntigravity } from "./auth-choice.apply.google-antigravity.js";
@@ -36,6 +37,8 @@ export async function applyAuthChoice(
   params: ApplyAuthChoiceParams,
 ): Promise<ApplyAuthChoiceResult> {
   const handlers: Array<(p: ApplyAuthChoiceParams) => Promise<ApplyAuthChoiceResult | null>> = [
+    // DILLOBOT: Claude Code SDK is the preferred auth method
+    applyAuthChoiceClaudeCodeSdk,
     applyAuthChoiceAnthropic,
     applyAuthChoiceOpenAI,
     applyAuthChoiceOAuth,

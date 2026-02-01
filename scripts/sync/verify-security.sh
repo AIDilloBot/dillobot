@@ -131,7 +131,7 @@ fi
 # Check 6: Claude Code SDK files
 echo ""
 echo "Checking Claude Code SDK files..."
-for file in src/agents/claude-code-sdk-auth.ts src/agents/claude-code-sdk-runner.ts src/config/types.security.ts; do
+for file in src/agents/claude-code-sdk-auth.ts src/agents/claude-code-sdk-runner.ts src/config/types.security.ts src/commands/auth-choice.apply.claude-code-sdk.ts; do
     if [ -f "$file" ]; then
         echo "✅ $file"
     else
@@ -139,6 +139,14 @@ for file in src/agents/claude-code-sdk-auth.ts src/agents/claude-code-sdk-runner
         WARNINGS=$((WARNINGS + 1))
     fi
 done
+
+# Check: Claude Code SDK is default auth option
+if grep -q "claude-code-sdk" src/commands/auth-choice-options.ts 2>/dev/null; then
+    echo "✅ Claude Code SDK is available as auth option"
+else
+    echo "⚠️  WARNING: Claude Code SDK not in auth options"
+    WARNINGS=$((WARNINGS + 1))
+fi
 
 # Check 7: Provider detection
 echo ""
