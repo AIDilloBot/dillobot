@@ -1,207 +1,161 @@
 /**
- * DilloBot Prompt Injection Filter
+ * DilloBot Quick Injection Pre-Filter
  *
- * Provides detection and sanitization of prompt injection attempts
- * in user messages before they reach the LLM.
+ * This module provides FAST pattern-based detection for unambiguous threats
+ * that don't require LLM analysis. These patterns catch things that are
+ * NEVER legitimate in normal content.
+ *
+ * For semantic injection detection, use injection-analyzer.ts which uses
+ * the LLM to understand intent rather than matching patterns.
+ *
+ * Pattern Philosophy:
+ * - Only include patterns for things that are NEVER legitimate
+ * - Credential patterns detect DATA, not intent
+ * - Unicode manipulation characters are never needed in normal text
+ * - Webhook URLs for known exfil services are never legitimate to include
  */
 
 import type { InjectionFilterConfig, InjectionScanResult, InjectionSeverity } from "../types.js";
 
 /**
- * Injection patterns with associated severity and weight.
- * Higher weights contribute more to the total score.
+ * Critical patterns that are NEVER legitimate.
+ * These are fast checks that run before LLM analysis.
  */
-const INJECTION_PATTERNS: Array<{
+const CRITICAL_PATTERNS: Array<{
   pattern: RegExp;
   name: string;
   severity: InjectionSeverity;
-  weight: number;
+  category: "unicode" | "exfil_endpoint" | "credential";
+  description: string;
 }> = [
-  // Instruction override attempts (high severity)
+  // ==========================================================================
+  // UNICODE MANIPULATION - Never legitimate in normal text
+  // ==========================================================================
   {
-    pattern: /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?|guidelines?)/i,
-    name: "ignore_previous",
-    severity: "high",
-    weight: 30,
-  },
-  {
-    pattern: /disregard\s+(all\s+)?(previous|prior|above|your)/i,
-    name: "disregard_instructions",
-    severity: "high",
-    weight: 30,
-  },
-  {
-    pattern: /forget\s+(everything|all|your)\s+(instructions?|rules?|guidelines?|training)/i,
-    name: "forget_instructions",
-    severity: "high",
-    weight: 30,
-  },
-
-  // Role hijacking attempts (high severity)
-  {
-    pattern: /you\s+are\s+now\s+(a|an)\s+/i,
-    name: "role_hijack",
-    severity: "high",
-    weight: 25,
-  },
-  {
-    pattern: /new\s+(instructions?|persona|role|identity):/i,
-    name: "new_persona",
-    severity: "high",
-    weight: 25,
-  },
-  {
-    pattern: /pretend\s+(you('re|are)\s+)?(to\s+be\s+)?/i,
-    name: "pretend_persona",
+    pattern: /[\u200B\u200C\u200D\u2060\uFEFF]/,
+    name: "zero_width_chars",
     severity: "medium",
-    weight: 20,
+    category: "unicode",
+    description: "Zero-width characters (can hide content or split keywords)",
+  },
+  {
+    pattern: /[\u202A-\u202E]/,
+    name: "bidi_override",
+    severity: "high",
+    category: "unicode",
+    description: "Bidirectional text override (can reverse/hide text direction)",
+  },
+  {
+    pattern: /[\uE0000-\uE007F]/,
+    name: "tag_chars",
+    severity: "high",
+    category: "unicode",
+    description: "Unicode tag characters (invisible, can encode hidden data)",
+  },
+  {
+    pattern: /[\u2061-\u2064]/,
+    name: "invisible_operators",
+    severity: "medium",
+    category: "unicode",
+    description: "Invisible mathematical operators (can separate keywords)",
   },
 
-  // System prompt injection (critical severity)
+  // ==========================================================================
+  // KNOWN EXFIL ENDPOINTS - Never legitimate to include in content
+  // ==========================================================================
   {
-    pattern: /system\s*:?\s*(prompt|override|command|instruction)/i,
-    name: "system_override",
+    pattern: /discord\.com\/api\/webhooks\/\d{17,}/i,
+    name: "discord_webhook",
     severity: "critical",
-    weight: 40,
+    category: "exfil_endpoint",
+    description: "Discord webhook URL (data exfiltration endpoint)",
   },
   {
-    pattern: /<\/?system>/i,
-    name: "xml_system_tag",
+    pattern: /hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[A-Za-z0-9]+/i,
+    name: "slack_webhook",
     severity: "critical",
-    weight: 40,
+    category: "exfil_endpoint",
+    description: "Slack webhook URL (data exfiltration endpoint)",
   },
   {
-    pattern: /<\/user>\s*<(system|assistant)>/i,
-    name: "xml_role_injection",
+    pattern: /(?:webhook\.site|requestbin\.com|hookbin\.com|pipedream\.net)\/[a-z0-9-]+/i,
+    name: "temp_webhook",
+    severity: "high",
+    category: "exfil_endpoint",
+    description: "Temporary webhook service (common exfiltration target)",
+  },
+
+  // ==========================================================================
+  // CREDENTIAL PATTERNS - Data detection (never include in external content)
+  // ==========================================================================
+  {
+    pattern: /AKIA[0-9A-Z]{16}/,
+    name: "aws_access_key",
     severity: "critical",
-    weight: 45,
+    category: "credential",
+    description: "AWS Access Key ID",
   },
   {
-    pattern: /\]\s*\n\s*\[?(system|assistant|user)\]?:/i,
-    name: "bracket_role_injection",
-    severity: "high",
-    weight: 35,
-  },
-
-  // Jailbreak attempts (high severity)
-  {
-    pattern: /\bDAN\b/,
-    name: "dan_jailbreak",
-    severity: "high",
-    weight: 30,
+    pattern: /ghp_[A-Za-z0-9_]{36,}/,
+    name: "github_pat",
+    severity: "critical",
+    category: "credential",
+    description: "GitHub Personal Access Token",
   },
   {
-    pattern: /\b(developer|dev)\s*mode\b/i,
-    name: "developer_mode",
-    severity: "high",
-    weight: 25,
+    pattern: /gho_[A-Za-z0-9_]{36,}/,
+    name: "github_oauth",
+    severity: "critical",
+    category: "credential",
+    description: "GitHub OAuth Token",
   },
   {
-    pattern: /\bno\s+(restrictions?|limits?|rules?|guidelines?)\b/i,
-    name: "no_restrictions",
-    severity: "high",
-    weight: 25,
+    pattern: /sk-ant-[A-Za-z0-9_-]{40,}/,
+    name: "anthropic_key",
+    severity: "critical",
+    category: "credential",
+    description: "Anthropic API Key",
   },
   {
-    pattern: /\bunlock(ed)?\s+(mode|capabilities?|features?)\b/i,
-    name: "unlock_mode",
-    severity: "high",
-    weight: 25,
-  },
-
-  // Tool invocation attempts (medium severity)
-  {
-    pattern: /\bexec\b.*command\s*=/i,
-    name: "exec_command",
-    severity: "medium",
-    weight: 20,
+    pattern: /sk-[A-Za-z0-9]{48,}/,
+    name: "openai_key",
+    severity: "critical",
+    category: "credential",
+    description: "OpenAI API Key",
   },
   {
-    pattern: /elevated\s*=\s*true/i,
-    name: "elevated_privileges",
-    severity: "high",
-    weight: 30,
+    pattern: /AIza[0-9A-Za-z_-]{35}/,
+    name: "google_api_key",
+    severity: "critical",
+    category: "credential",
+    description: "Google API Key",
   },
   {
-    pattern: /\{\s*"?tool"?\s*:/i,
-    name: "tool_json",
-    severity: "medium",
-    weight: 15,
+    pattern: /(?:sk|pk)_(?:live|test)_[0-9a-zA-Z]{24,}/,
+    name: "stripe_key",
+    severity: "critical",
+    category: "credential",
+    description: "Stripe API Key",
   },
   {
-    pattern: /\{\s*"?function"?\s*:/i,
-    name: "function_json",
-    severity: "medium",
-    weight: 15,
-  },
-
-  // Data exfiltration attempts (high severity)
-  {
-    pattern: /send\s+(this\s+)?to\s+[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i,
-    name: "email_exfil",
-    severity: "high",
-    weight: 25,
-  },
-  {
-    pattern: /forward\s+(this\s+)?to\s+/i,
-    name: "forward_exfil",
-    severity: "medium",
-    weight: 15,
-  },
-
-  // Destructive commands (medium severity)
-  {
-    pattern: /rm\s+-rf/i,
-    name: "rm_rf_command",
-    severity: "medium",
-    weight: 20,
-  },
-  {
-    pattern: /delete\s+all\s+(emails?|files?|data|messages?)/i,
-    name: "delete_all",
-    severity: "medium",
-    weight: 20,
-  },
-
-  // Encoded payloads (medium severity)
-  {
-    pattern: /base64\s*:\s*[A-Za-z0-9+/=]{20,}/i,
-    name: "base64_payload",
-    severity: "medium",
-    weight: 15,
-  },
-
-  // Prompt extraction attempts (medium severity)
-  {
-    pattern: /reveal\s+(your\s+)?(system\s+)?prompt/i,
-    name: "reveal_prompt",
-    severity: "medium",
-    weight: 15,
-  },
-  {
-    pattern: /show\s+(me\s+)?(your\s+)?(system\s+)?instructions/i,
-    name: "show_instructions",
-    severity: "medium",
-    weight: 15,
-  },
-  {
-    pattern: /what\s+(are|is)\s+(your\s+)?(system\s+)?prompt/i,
-    name: "what_prompt",
-    severity: "low",
-    weight: 10,
+    pattern: /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----/,
+    name: "private_key",
+    severity: "critical",
+    category: "credential",
+    description: "Private Key (PEM format)",
   },
 ];
 
 /**
- * Default injection filter configuration.
+ * Default configuration for quick filter.
  */
 const DEFAULT_CONFIG: InjectionFilterConfig = {
   enabled: true,
-  mode: "sanitize",
+  mode: "warn", // Quick filter only warns; LLM analyzer decides actions
   thresholds: {
-    warn: 20,
-    sanitize: 50,
-    block: 80,
+    warn: 0, // Any detection triggers warning
+    sanitize: 100, // Don't auto-sanitize (let LLM decide)
+    block: 100, // Don't auto-block (let LLM decide)
   },
   logAttempts: true,
 };
@@ -214,13 +168,17 @@ export function getDefaultInjectionConfig(): InjectionFilterConfig {
 }
 
 /**
- * Scan content for prompt injection patterns.
+ * Scan content for critical patterns.
+ * This is a FAST pre-filter before LLM analysis.
  *
- * @param content The message content to scan
- * @param config Optional configuration overrides
- * @returns Scan result with detected patterns and severity
+ * @param content The content to scan
+ * @param config Optional configuration
+ * @returns Scan result with detected patterns
  */
-export function scanForInjection(content: string, config?: Partial<InjectionFilterConfig>): InjectionScanResult {
+export function scanForInjection(
+  content: string,
+  config?: Partial<InjectionFilterConfig>,
+): InjectionScanResult {
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
   if (!cfg.enabled) {
@@ -235,44 +193,42 @@ export function scanForInjection(content: string, config?: Partial<InjectionFilt
   }
 
   const detectedPatterns: string[] = [];
-  let totalScore = 0;
   let maxSeverity: InjectionSeverity = "none";
+  const findings: Array<{ name: string; category: string; description: string }> = [];
 
-  // Check all patterns
-  for (const { pattern, name, severity, weight } of INJECTION_PATTERNS) {
+  // Check all critical patterns
+  for (const { pattern, name, severity, category, description } of CRITICAL_PATTERNS) {
     if (pattern.test(content)) {
       detectedPatterns.push(name);
-      totalScore += weight;
+      findings.push({ name, category, description });
 
-      // Track max severity
       if (severityToNumber(severity) > severityToNumber(maxSeverity)) {
         maxSeverity = severity;
       }
     }
   }
 
-  // Check custom patterns
+  // Check custom patterns if provided
   if (cfg.customPatterns) {
     for (let i = 0; i < cfg.customPatterns.length; i++) {
       const customPattern = cfg.customPatterns[i];
       if (customPattern.test(content)) {
         detectedPatterns.push(`custom_${i}`);
-        totalScore += 20; // Default weight for custom patterns
       }
     }
   }
 
   const detected = detectedPatterns.length > 0;
-  const shouldBlock = totalScore >= cfg.thresholds.block;
-  const shouldSanitize = totalScore >= cfg.thresholds.sanitize && !shouldBlock;
 
+  // Quick filter doesn't block/sanitize - it just detects and warns
+  // The LLM analyzer makes the final decision
   return {
     detected,
     severity: maxSeverity,
     patterns: detectedPatterns,
-    score: totalScore,
-    shouldBlock,
-    shouldSanitize,
+    score: detectedPatterns.length * 10,
+    shouldBlock: false, // Let LLM decide
+    shouldSanitize: false, // Let LLM decide
   };
 }
 
@@ -295,59 +251,33 @@ function severityToNumber(severity: InjectionSeverity): number {
 }
 
 /**
- * Sanitize content by removing or neutralizing injection patterns.
- *
- * This function attempts to remove dangerous patterns while preserving
- * legitimate content as much as possible.
+ * Strip dangerous unicode characters from content.
+ * This is a targeted sanitization that only removes characters
+ * that are NEVER legitimate.
  *
  * @param content The content to sanitize
- * @returns Sanitized content
+ * @returns Content with dangerous unicode removed
  */
-export function sanitizeInjectionPatterns(content: string): string {
-  let sanitized = content;
-
-  // Remove XML-style role tags
-  sanitized = sanitized.replace(/<\/?(?:system|assistant|user)>/gi, "[REMOVED]");
-
-  // Remove bracket-style role markers
-  sanitized = sanitized.replace(/\[(?:system|assistant|user)\]:/gi, "[REMOVED]:");
-
-  // Neutralize "ignore previous" type instructions
-  sanitized = sanitized.replace(
-    /(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above|your)\s+(instructions?|prompts?|rules?|guidelines?)/gi,
-    "[SANITIZED: $1 $4]",
-  );
-
-  // Neutralize "you are now" role changes
-  sanitized = sanitized.replace(/you\s+are\s+now\s+(a|an)\s+/gi, "[SANITIZED: role change] ");
-
-  // Neutralize system override attempts
-  sanitized = sanitized.replace(/system\s*:\s*(prompt|override|command|instruction)/gi, "[SANITIZED: $1]");
-
-  // Neutralize jailbreak keywords
-  sanitized = sanitized.replace(/\bDAN\b/g, "[SANITIZED]");
-  sanitized = sanitized.replace(/\b(developer|dev)\s*mode\b/gi, "[SANITIZED: $1 mode]");
-
-  return sanitized;
+export function stripDangerousUnicode(content: string): string {
+  return content
+    .replace(/[\u200B\u200C\u200D\u2060\uFEFF]/g, "") // Zero-width chars
+    .replace(/[\u202A-\u202E]/g, "") // Bidi overrides
+    .replace(/[\uE0000-\uE007F]/g, "") // Tag chars
+    .replace(/[\u2061-\u2064]/g, ""); // Invisible operators
 }
 
 /**
  * Escape content for safe inclusion in prompts.
- *
- * This wraps content in security boundaries and escapes
- * potentially dangerous sequences.
+ * Wraps content in security boundaries.
  *
  * @param content The content to escape
- * @param source Optional source label for the content
+ * @param source Optional source label
  * @returns Escaped content with security boundaries
  */
 export function escapeForPrompt(content: string, source?: string): string {
   const sourceLabel = source ? ` (source: ${source})` : "";
+  const sanitized = stripDangerousUnicode(content);
 
-  // First sanitize any injection patterns
-  const sanitized = sanitizeInjectionPatterns(content);
-
-  // Wrap in security boundaries
   return [
     `<<<EXTERNAL_UNTRUSTED_CONTENT${sourceLabel}>>>`,
     sanitized,
@@ -356,14 +286,22 @@ export function escapeForPrompt(content: string, source?: string): string {
 }
 
 /**
- * Check if content appears to be from an external/untrusted source
- * based on session key patterns.
+ * Get pattern details for a detected pattern name.
  */
-export function isExternalContent(sessionKey: string): boolean {
-  return (
-    sessionKey.startsWith("hook:") ||
-    sessionKey.startsWith("webhook:") ||
-    sessionKey.startsWith("email:") ||
-    sessionKey.startsWith("api:")
-  );
+export function getPatternDetails(
+  patternName: string,
+): { category: string; description: string } | undefined {
+  const pattern = CRITICAL_PATTERNS.find((p) => p.name === patternName);
+  if (pattern) {
+    return { category: pattern.category, description: pattern.description };
+  }
+  return undefined;
+}
+
+/**
+ * Legacy function - kept for backwards compatibility.
+ * Use stripDangerousUnicode() instead for targeted sanitization.
+ */
+export function sanitizeInjectionPatterns(content: string): string {
+  return stripDangerousUnicode(content);
 }

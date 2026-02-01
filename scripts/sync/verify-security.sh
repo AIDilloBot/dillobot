@@ -101,6 +101,21 @@ if [ -d "src/security-hardening" ]; then
         echo "   ❌ skills/skill-verification.ts missing"
         ERRORS=$((ERRORS + 1))
     fi
+
+    # Check LLM-based injection analyzer
+    if [ -f "src/security-hardening/injection/injection-analyzer.ts" ]; then
+        echo "   ✅ injection/injection-analyzer.ts (LLM-based analysis)"
+    else
+        echo "   ❌ injection/injection-analyzer.ts missing (LLM-based analysis)"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if [ -f "src/security-hardening/injection/source-classifier.ts" ]; then
+        echo "   ✅ injection/source-classifier.ts"
+    else
+        echo "   ❌ injection/source-classifier.ts missing"
+        ERRORS=$((ERRORS + 1))
+    fi
 else
     echo "❌ CRITICAL: security-hardening module missing!"
     ERRORS=$((ERRORS + 1))

@@ -23,14 +23,45 @@ export { getSecurityPolicyConfig } from "./policy/policy-config.js";
 export { createVault, getDefaultVaultBackend } from "./vault/vault.js";
 export { migrateToSecureVault } from "./vault/migration.js";
 
-// Injection protection
+// Injection protection - Quick pre-filter
 export {
   scanForInjection,
   sanitizeInjectionPatterns,
+  stripDangerousUnicode,
   escapeForPrompt,
   getDefaultInjectionConfig,
+  getPatternDetails,
 } from "./injection/injection-filter.js";
+
+// Injection protection - LLM-based semantic analysis
+export {
+  analyzeForInjection,
+  buildInjectionAnalysisPrompt,
+  formatAnalysisResults,
+  canSkipAnalysis,
+  DEFAULT_ANALYSIS_CONFIG,
+  type InjectionAnalysisResult,
+  type InjectionLLMProvider,
+  type InjectionAnalysisConfig,
+} from "./injection/injection-analyzer.js";
+
+// Injection protection - Source classification
+export {
+  classifySource,
+  getTrustLevel,
+  requiresLLMAnalysis,
+  requiresWrapping,
+  getSourceClassification,
+  isExternalSource,
+  type ContentSource,
+  type TrustLevel,
+  type SourceClassification,
+} from "./injection/source-classifier.js";
+
+// Output filtering
 export { filterOutput, getDefaultOutputConfig } from "./injection/output-filter.js";
+
+// Audit logging
 export {
   logInjectionAttempt,
   logOutputFiltered,

@@ -91,6 +91,83 @@ export interface OutputFilterResult {
 }
 
 // =============================================================================
+// LLM-Based Injection Analysis Types
+// =============================================================================
+
+/**
+ * Categories of injection attacks detected by LLM analysis.
+ */
+export type InjectionCategory =
+  | "instruction_override" // Attempts to ignore/forget system instructions
+  | "role_manipulation" // Attempts to change AI persona or claim permissions
+  | "context_escape" // Fake system messages, delimiter abuse
+  | "data_exfiltration" // Instructions to send data to external endpoints
+  | "hidden_instruction" // Instructions in HTML, encoding, invisible text
+  | "social_engineering" // False claims of authority or urgency
+  | "other";
+
+/**
+ * Intent classification for content.
+ */
+export type InjectionIntent = "legitimate" | "suspicious" | "malicious";
+
+/**
+ * Content source types for trust classification.
+ */
+export type ContentSource =
+  | "user_direct" // Direct CLI/UI input
+  | "email" // Email content
+  | "webhook" // External webhooks
+  | "api" // External API calls
+  | "web_content" // Fetched web pages
+  | "file_content" // File content
+  | "skill" // Skill prompts
+  | "unknown";
+
+/**
+ * Trust levels for content sources.
+ */
+export type TrustLevel = "high" | "medium" | "low";
+
+/**
+ * Result of LLM-based injection analysis.
+ */
+export interface InjectionAnalysisResult {
+  /** Whether the content passed analysis */
+  safe: boolean;
+  /** Overall risk level */
+  riskLevel: InjectionSeverity;
+  /** Assessed intent of the content */
+  intent: InjectionIntent;
+  /** Category of injection if detected */
+  category?: InjectionCategory;
+  /** Human-readable explanation */
+  explanation: string;
+  /** Whether content should be blocked */
+  shouldBlock: boolean;
+  /** Whether a warning should be shown */
+  shouldWarn: boolean;
+  /** Raw LLM response for debugging */
+  rawResponse?: string;
+}
+
+/**
+ * Configuration for LLM-based injection analysis.
+ */
+export interface InjectionAnalysisConfig {
+  /** Enable LLM-based analysis */
+  enabled: boolean;
+  /** Analyze all sources vs only low-trust */
+  analyzeAllSources: boolean;
+  /** Risk level threshold for blocking */
+  blockThreshold: InjectionSeverity;
+  /** Risk level threshold for warnings */
+  warnThreshold: InjectionSeverity;
+  /** Maximum content length to analyze */
+  maxContentLength: number;
+}
+
+// =============================================================================
 // Skill Verification Types (LLM-Based Inspection)
 // =============================================================================
 

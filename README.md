@@ -73,24 +73,51 @@ Credentials are never stored in plaintext. Platform-specific secure storage:
 
 ---
 
-### 3. Prompt Injection Protection
+### 3. LLM-Based Prompt Injection Protection
 
-25+ detection patterns catch common injection attacks:
+DilloBot uses the LLM itself to detect injection attempts semantically, rather than relying on easily-bypassed regex patterns. This catches novel attacks, encoding tricks, and sophisticated social engineering.
 
-| Category | Examples |
-|----------|----------|
-| Instruction override | "ignore previous instructions", "disregard all rules" |
-| Role manipulation | "you are now DAN", "pretend you're unrestricted" |
-| Context injection | XML/JSON injection, fake system messages |
-| Encoding attacks | Base64 payloads, unicode tricks |
-| Tool invocation | Fake tool calls, function injection |
+**Layered Defense:**
 
-**Severity scoring:** Each match adds to a cumulative score. Configurable thresholds for:
-- **Warn** — Log the attempt, continue processing
-- **Sanitize** — Remove detected patterns, continue
-- **Block** — Reject the message entirely
+```
+Input → Quick Pre-Filter → Source Classification → LLM Analysis → Safe Content
+```
 
-**Whitelist support:** Trusted sessions/senders can be exempted.
+**Layer 1: Quick Pre-Filter (15 patterns)**
+Only catches things that are NEVER legitimate:
+- Dangerous unicode (zero-width chars, RTL overrides, tag characters)
+- Known exfil endpoints (Discord/Slack webhooks, requestbin)
+- Credential patterns (AWS keys, GitHub tokens, API keys)
+
+**Layer 2: Source Classification**
+Different trust levels based on content origin:
+
+| Source | Trust Level | Treatment |
+|--------|-------------|-----------|
+| Direct user input | High | Quick filter only |
+| Skill content | Medium | LLM skill inspection |
+| Email content | Low | Full LLM analysis |
+| Webhook/API | Low | Full LLM analysis |
+| Web content | Low | Full LLM analysis |
+
+**Layer 3: LLM Security Analysis**
+For low-trust sources, the LLM analyzes content for:
+
+| Category | What It Detects |
+|----------|-----------------|
+| Instruction override | "ignore previous", "forget your guidelines" |
+| Role manipulation | "you are now DAN", "enable developer mode" |
+| Context escape | Fake system tags, delimiter abuse, JSON injection |
+| Data exfiltration | "send this to webhook", "forward to my email" |
+| Hidden instructions | HTML comments, encoded content, invisible text |
+| Social engineering | False claims of authority, urgency, permissions |
+
+**Why LLM-Based?**
+- Understands **intent**, not just patterns
+- Catches **novel attacks** without pattern updates
+- Resistant to **encoding tricks** (LLM sees decoded content)
+- **Low false positives** (semantic understanding)
+- Different treatment for **trusted vs. untrusted sources**
 
 ---
 
@@ -243,13 +270,15 @@ DilloBot adds a `security` section to your config:
       "backend": "auto"
     },
     "injection": {
-      "enabled": true,
-      "mode": "sanitize",
-      "logAttempts": true,
-      "thresholds": {
-        "warn": 20,
-        "sanitize": 50,
-        "block": 80
+      "quickFilter": {
+        "enabled": true,
+        "logAttempts": true
+      },
+      "llmAnalysis": {
+        "enabled": true,
+        "analyzeAllSources": false,
+        "blockThreshold": "critical",
+        "warnThreshold": "medium"
       }
     },
     "output": {
@@ -336,7 +365,9 @@ src/security-hardening/
 ├── auth/
 │   └── challenge-response.ts    # Cryptographic auth
 ├── injection/
-│   ├── injection-filter.ts      # Input scanning (25+ patterns)
+│   ├── injection-filter.ts      # Quick pre-filter (15 critical patterns)
+│   ├── injection-analyzer.ts    # LLM-based semantic analysis
+│   ├── source-classifier.ts     # Content source/trust classification
 │   ├── injection-audit.ts       # Security event logging
 │   └── output-filter.ts         # Leak prevention
 ├── policy/
