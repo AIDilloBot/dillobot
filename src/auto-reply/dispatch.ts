@@ -2,6 +2,12 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { DispatchFromConfigResult } from "./reply/dispatch-from-config.js";
 import type { FinalizedMsgContext, MsgContext } from "./templating.js";
 import type { GetReplyOptions } from "./types.js";
+import { logWarn } from "../logger.js";
+import {
+  processContentSecurity,
+  shouldBlockImmediately,
+  type ContentSecurityConfig,
+} from "../security-hardening/index.js";
 import { dispatchReplyFromConfig } from "./reply/dispatch-from-config.js";
 import { finalizeInboundContext } from "./reply/inbound-context.js";
 import {
@@ -20,8 +26,78 @@ export async function dispatchInboundMessage(params: {
   dispatcher: ReplyDispatcher;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
+  /** DILLOBOT: Security config overrides */
+  securityConfig?: Partial<ContentSecurityConfig>;
 }): Promise<DispatchInboundResult> {
   const finalized = finalizeInboundContext(params.ctx);
+
+  // DILLOBOT: Process content through security pipeline
+  const sessionKey = finalized.SessionKey ?? "unknown";
+  const bodyToCheck = finalized.BodyForAgent ?? finalized.Body ?? "";
+
+  // Quick check for critical patterns that should block immediately
+  const quickBlock = shouldBlockImmediately(bodyToCheck);
+  if (quickBlock.block) {
+    logWarn(
+      `[security] BLOCKED inbound message due to critical security pattern ` +
+        `(session=${sessionKey}, from=${finalized.From}): ${quickBlock.reason}`,
+    );
+    // Return early without processing - message is blocked
+    return {
+      queuedFinal: false,
+      counts: { tool: 0, block: 0, final: 0 },
+    };
+  }
+
+  // Run full security processing
+  const securityResult = await processContentSecurity(
+    bodyToCheck,
+    {
+      sessionKey,
+      senderId: finalized.From,
+      channel: finalized.ChatType,
+      metadata: {
+        accountId: finalized.AccountId,
+        messageSid: finalized.MessageSid,
+      },
+    },
+    undefined, // LLM provider not available at this point
+    {
+      enabled: true,
+      llmAnalysisEnabled: false, // Disable LLM analysis (no provider here)
+      blockOnCriticalPatterns: true,
+      wrapExternalContent: true,
+      stripUnicode: true,
+      logEvents: true,
+      ...params.securityConfig,
+    },
+  );
+
+  // Check if blocked by security
+  if (securityResult.blocked) {
+    logWarn(
+      `[security] BLOCKED inbound message: ${securityResult.blockReason} ` +
+        `(session=${sessionKey}, from=${finalized.From})`,
+    );
+    // Return early without processing - message is blocked
+    return {
+      queuedFinal: false,
+      counts: { tool: 0, block: 0, final: 0 },
+    };
+  }
+
+  // Log warnings
+  if (securityResult.hasWarnings) {
+    for (const warning of securityResult.warnings) {
+      logWarn(`[security] ${warning} (session=${sessionKey})`);
+    }
+  }
+
+  // Use processed content if it was modified (wrapped/sanitized)
+  if (securityResult.processedContent !== bodyToCheck) {
+    finalized.BodyForAgent = securityResult.processedContent;
+  }
+
   return await dispatchReplyFromConfig({
     ctx: finalized,
     cfg: params.cfg,

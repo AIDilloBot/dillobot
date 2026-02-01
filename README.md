@@ -119,6 +119,14 @@ For low-trust sources, the LLM analyzes content for:
 - **Low false positives** (semantic understanding)
 - Different treatment for **trusted vs. untrusted sources**
 
+**Protected Channels:**
+All message channels go through the security pipeline:
+- Discord, Slack, Telegram, Signal, Line, iMessage
+- WhatsApp (via web bridge)
+- Email hooks (Gmail, etc.)
+- Webhooks and API calls
+- Web interface
+
 ---
 
 ### 4. Output Filtering
