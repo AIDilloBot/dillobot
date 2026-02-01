@@ -30,6 +30,8 @@ const SECURITY_CRITICAL_FILES = [
   "src/config/types.models.ts",
   "src/config/types.openclaw.ts",
   "src/agents/models-config.providers.ts",
+  "src/auto-reply/dispatch.ts",           // Central security integration for ALL channels
+  "src/cron/isolated-agent/run.ts",       // Security for email/webhook hooks
 ];
 
 interface SyncResult {

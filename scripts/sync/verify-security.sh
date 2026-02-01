@@ -160,6 +160,34 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 9: Central dispatch security integration
+echo ""
+echo "Checking central dispatch security integration..."
+if grep -q "processContentSecurity" src/auto-reply/dispatch.ts 2>/dev/null; then
+    echo "✅ processContentSecurity integrated in dispatch.ts"
+else
+    echo "❌ CRITICAL: processContentSecurity missing from dispatch.ts!"
+    echo "   This is required to protect ALL message channels."
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "shouldBlockImmediately" src/auto-reply/dispatch.ts 2>/dev/null; then
+    echo "✅ shouldBlockImmediately integrated in dispatch.ts"
+else
+    echo "❌ CRITICAL: shouldBlockImmediately missing from dispatch.ts!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check 10: Cron/isolated agent security integration
+echo ""
+echo "Checking cron agent security integration..."
+if grep -q "shouldBlockImmediately" src/cron/isolated-agent/run.ts 2>/dev/null; then
+    echo "✅ Security checks present in cron/isolated-agent/run.ts"
+else
+    echo "⚠️  WARNING: Security checks missing from cron/isolated-agent/run.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Summary
 echo ""
 echo "=================================="

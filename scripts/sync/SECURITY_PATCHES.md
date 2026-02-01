@@ -123,6 +123,87 @@ if (claudeCodeAvailable) {
 
 ---
 
+### 7. Central Dispatch Security Integration
+
+**File:** `src/auto-reply/dispatch.ts`
+
+**Imports Required:**
+```typescript
+import {
+  processContentSecurity,
+  shouldBlockImmediately,
+  type ContentSecurityConfig,
+} from "../security-hardening/index.js";
+import { logWarn } from "../logger.js";
+```
+
+**Security Parameter Required** in `dispatchInboundMessage`:
+```typescript
+/** DILLOBOT: Security config overrides */
+securityConfig?: Partial<ContentSecurityConfig>;
+```
+
+**Security Processing Required** at start of `dispatchInboundMessage` (after `finalizeInboundContext`):
+```typescript
+// DILLOBOT: Process content through security pipeline
+const sessionKey = finalized.SessionKey ?? "unknown";
+const bodyToCheck = finalized.BodyForAgent ?? finalized.Body ?? "";
+
+// Quick check for critical patterns that should block immediately
+const quickBlock = shouldBlockImmediately(bodyToCheck);
+if (quickBlock.block) {
+  logWarn(`[security] BLOCKED inbound message...`);
+  return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
+}
+
+// Run full security processing
+const securityResult = await processContentSecurity(bodyToCheck, {...});
+if (securityResult.blocked) {
+  return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
+}
+
+// Use processed content if modified
+if (securityResult.processedContent !== bodyToCheck) {
+  finalized.BodyForAgent = securityResult.processedContent;
+}
+```
+
+**Why:** This is the central entry point for ALL message channels. Security processing here protects Discord, Slack, Telegram, Signal, Line, iMessage, WhatsApp, webhooks, API, and web interface.
+
+---
+
+### 8. Cron/Isolated Agent Security Integration
+
+**File:** `src/cron/isolated-agent/run.ts`
+
+**Imports Required:**
+```typescript
+import {
+  processContentSecurity,
+  shouldBlockImmediately,
+} from "../../security-hardening/index.js";
+```
+
+**Security Processing Required** in `runCronAgentTurn` (before agent execution):
+```typescript
+// DILLOBOT: Quick security check
+const quickBlock = shouldBlockImmediately(params.message);
+if (quickBlock.block) {
+  logWarn(`[security] BLOCKED external content...`);
+  return { status: "error", error: `Security: Content blocked - ${quickBlock.reason}` };
+}
+
+// DILLOBOT: Full security processing
+const securityResult = await processContentSecurity(params.message, {...});
+if (securityResult.blocked) {
+  return { status: "error", error: `Security: ${securityResult.blockReason}` };
+}
+```
+
+**Why:** Protects email hooks and external webhook triggers that bypass the main dispatch flow.
+
+---
+
 ## Security Module
 
 **Directory:** `src/security-hardening/`
@@ -155,3 +236,6 @@ After any upstream sync, verify:
 9. [ ] `/src/agents/claude-code-sdk-runner.ts` exists
 10. [ ] `/src/config/types.security.ts` exists
 11. [ ] `dillobot` CLI alias in package.json bin section
+12. [ ] `processContentSecurity` called in dispatch.ts (central security integration)
+13. [ ] `shouldBlockImmediately` called in dispatch.ts (quick filter)
+14. [ ] Security imports present in cron/isolated-agent/run.ts
