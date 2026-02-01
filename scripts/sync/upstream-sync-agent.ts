@@ -17,6 +17,11 @@
 import { spawn, execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ES module compatibility
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configuration
 const UPSTREAM_REPO = "https://github.com/openclaw/openclaw.git";
@@ -82,8 +87,7 @@ async function askClaude(prompt: string, options?: {
 }): Promise<string> {
   return new Promise((resolve, reject) => {
     const args = [
-      "--print",  // Print response to stdout
-      "--no-input", // Non-interactive mode
+      "--print",  // Non-interactive mode, print response to stdout
     ];
 
     if (options?.allowedTools) {
@@ -94,8 +98,8 @@ async function askClaude(prompt: string, options?: {
       args.push("--max-turns", String(options.maxTurns));
     }
 
-    // Add the prompt
-    args.push("-p", prompt);
+    // Add the prompt (must be last, as positional argument)
+    args.push(prompt);
 
     const claude = spawn("claude", args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -155,10 +159,22 @@ async function checkUpstreamUpdates(): Promise<{ hasUpdates: boolean; commitCoun
 }
 
 /**
- * Get the diff of upstream changes
+ * Get the diff of upstream changes (limited to security-critical files to avoid buffer overflow)
  */
 async function getUpstreamDiff(): Promise<string> {
-  return run(`git diff HEAD..upstream/${UPSTREAM_BRANCH}`);
+  // Only get diff for security-critical files to avoid buffer overflow on large syncs
+  const criticalFilesDiff = SECURITY_CRITICAL_FILES.map(
+    (f) => run(`git diff HEAD..upstream/${UPSTREAM_BRANCH} -- "${f}"`, { ignoreError: true }),
+  )
+    .filter(Boolean)
+    .join("\n");
+
+  if (criticalFilesDiff) {
+    return criticalFilesDiff;
+  }
+
+  // If no critical files changed, get a summary of all changes (stat only)
+  return run(`git diff --stat HEAD..upstream/${UPSTREAM_BRANCH}`);
 }
 
 /**
