@@ -637,7 +637,7 @@ export function attachGatewayWsMessageHandler(params: {
               role,
               scopes,
               remoteIp: reportedClientIp,
-              silent: isLocalClient,
+              silent: false, // DILLOBOT: Never auto-approve, even local connections
             });
             const context = buildRequestContext();
             if (pairing.request.silent === true) {

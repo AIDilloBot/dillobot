@@ -147,7 +147,10 @@
     "tui:dev": "OPENCLAW_PROFILE=dev CLAWDBOT_PROFILE=dev node scripts/run-node.mjs --dev tui",
     "ui:build": "node scripts/ui.js build",
     "ui:dev": "node scripts/ui.js dev",
-    "ui:install": "node scripts/ui.js install"
+    "ui:install": "node scripts/ui.js install",
+    "dillobot:verify": "bash scripts/sync/verify-security.sh",
+    "dillobot:sync": "npx ts-node scripts/sync/upstream-sync-agent.ts",
+    "dillobot:sync:check": "git fetch upstream 2>/dev/null || git remote add upstream https://github.com/openclaw/openclaw.git && git fetch upstream && git rev-list --count HEAD..upstream/main"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.13.1",

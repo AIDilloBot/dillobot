@@ -30,6 +30,7 @@ import { normalizeConfigPaths } from "./normalize-paths.js";
 import { resolveConfigPath, resolveDefaultConfigCandidates, resolveStateDir } from "./paths.js";
 import { applyConfigOverrides } from "./runtime-overrides.js";
 import { validateConfigObjectWithPlugins } from "./validation.js";
+import { enforceSecurityPolicy } from "../security-hardening/policy/security-policy.js";
 import { compareOpenClawVersions } from "./version.js";
 
 // Re-export for backwards compatibility
@@ -305,7 +306,9 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         });
       }
 
-      return applyConfigOverrides(cfg);
+      // DILLOBOT: Enforce security policy before returning config
+      const securedCfg = enforceSecurityPolicy(cfg);
+      return applyConfigOverrides(securedCfg);
     } catch (err) {
       if (err instanceof DuplicateAgentDirError) {
         deps.logger.error(err.message);

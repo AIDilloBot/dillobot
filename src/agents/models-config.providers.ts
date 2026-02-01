@@ -13,6 +13,8 @@ import {
   SYNTHETIC_MODEL_CATALOG,
 } from "./synthetic-models.js";
 import { discoverVeniceModels, VENICE_BASE_URL } from "./venice-models.js";
+import { isClaudeCodeSubscriptionAvailable, getClaudeCodeAuth } from "./claude-code-sdk-auth.js";
+import { getClaudeCodeSdkProviderConfig } from "./claude-code-sdk-runner.js";
 
 type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 export type ProviderConfig = NonNullable<ModelsConfig["providers"]>[string];
@@ -401,6 +403,18 @@ export async function resolveImplicitProviders(params: {
   const authStore = ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
+
+  // DILLOBOT: Claude Code SDK provider (preferred when available)
+  const claudeCodeAvailable = await isClaudeCodeSubscriptionAvailable();
+  if (claudeCodeAvailable) {
+    const auth = await getClaudeCodeAuth();
+    if (auth) {
+      providers["claude-code-agent"] = {
+        ...getClaudeCodeSdkProviderConfig(),
+        apiKey: "subscription", // Marker for subscription-based auth
+      };
+    }
+  }
 
   const minimaxKey =
     resolveEnvApiKeyVarName("minimax") ??
