@@ -153,7 +153,7 @@ export function getClaudeCodeSdkProviderConfig() {
         id: "claude-opus-4-5",
         name: "Claude Opus 4.5 (Claude Code)",
         reasoning: false,
-        input: ["text", "image"] as const,
+        input: ["text", "image"] as ("text" | "image")[],
         cost: {
           input: 0, // Covered by subscription
           output: 0,
@@ -167,7 +167,7 @@ export function getClaudeCodeSdkProviderConfig() {
         id: "claude-sonnet-4-5",
         name: "Claude Sonnet 4.5 (Claude Code)",
         reasoning: false,
-        input: ["text", "image"] as const,
+        input: ["text", "image"] as ("text" | "image")[],
         cost: {
           input: 0,
           output: 0,

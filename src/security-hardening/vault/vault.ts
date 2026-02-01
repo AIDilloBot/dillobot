@@ -11,6 +11,14 @@
 import os from "node:os";
 import type { SecureVault, VaultBackend } from "../types.js";
 
+// Declare keytar as optional module (installed separately for native keychain support)
+declare module "keytar" {
+  export function setPassword(service: string, account: string, password: string): Promise<void>;
+  export function getPassword(service: string, account: string): Promise<string | null>;
+  export function deletePassword(service: string, account: string): Promise<boolean>;
+  export function findCredentials(service: string): Promise<Array<{ account: string; password: string }>>;
+}
+
 /**
  * Service name for vault entries.
  */
@@ -116,7 +124,8 @@ export async function createVault(
  */
 async function createKeychainVault(): Promise<SecureVault> {
   // Dynamic import to avoid requiring keytar on all platforms
-  let keytar: typeof import("keytar");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let keytar: any;
   try {
     keytar = await import("keytar");
   } catch {
@@ -148,7 +157,7 @@ async function createKeychainVault(): Promise<SecureVault> {
 
     async list(): Promise<string[]> {
       const credentials = await keytar.findCredentials(VAULT_SERVICE_NAME);
-      return credentials.map((c) => c.account);
+      return credentials.map((c: { account: string }) => c.account);
     },
   };
 }

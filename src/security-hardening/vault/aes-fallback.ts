@@ -125,7 +125,7 @@ export class AesFallbackVault implements SecureVault {
    */
   private async deriveKey(password: string, salt: Buffer): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      crypto.pbkdf2(password, salt, PBKDF2_CONFIG.iterations, PBKDF2_CONFIG.keyLength, PBKDF2_CONFIG.digest, (err, key) => {
+      crypto.pbkdf2(password, salt, PBKDF2_CONFIG.iterations, PBKDF2_CONFIG.keyLength, PBKDF2_CONFIG.digest, (err: Error | null, key: Buffer) => {
         if (err) reject(err);
         else resolve(key);
       });
