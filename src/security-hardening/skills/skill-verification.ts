@@ -168,8 +168,8 @@ export async function verifySkillForInstallation(
     };
   }
 
-  // Convert to content for inspection
-  const content = skillToContent(skill, sourcePath);
+  // Convert to content for inspection (reads the skill file)
+  const content = await skillToContent(skill, sourcePath);
   const contentHash = hashSkillContent(content);
 
   // Check cache
@@ -179,7 +179,7 @@ export async function verifySkillForInstallation(
   }
 
   // Quick security check first (fast, no LLM needed)
-  const quickCheck = quickSecurityCheck(skill.prompt);
+  const quickCheck = quickSecurityCheck(content.prompt);
   if (quickCheck.hasRedFlags) {
     const inspection: SkillInspectionResult = {
       safe: false,

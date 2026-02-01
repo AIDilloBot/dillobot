@@ -244,13 +244,24 @@ export async function inspectSkill(
 
 /**
  * Convert a Skill object to SkillContent for inspection.
+ * Reads the skill's markdown file content.
  */
-export function skillToContent(skill: Skill, sourcePath?: string): SkillContent {
+export async function skillToContent(skill: Skill, sourcePath?: string): Promise<SkillContent> {
+  // Read the skill file content
+  let content = "";
+  try {
+    const { readFile } = await import("node:fs/promises");
+    content = await readFile(skill.filePath, "utf-8");
+  } catch {
+    // If we can't read the file, use the description as a fallback
+    content = skill.description ?? "";
+  }
+
   return {
     name: skill.name,
     description: skill.description,
-    prompt: skill.prompt,
-    sourcePath,
+    prompt: content,
+    sourcePath: sourcePath ?? skill.filePath,
   };
 }
 

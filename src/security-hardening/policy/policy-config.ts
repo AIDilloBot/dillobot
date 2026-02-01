@@ -38,10 +38,11 @@ const DEFAULT_CREDENTIAL_POLICY: CredentialPolicyConfig = {
  * Default skill policy configuration.
  */
 const DEFAULT_SKILL_POLICY: SkillPolicyConfig = {
-  requireVerification: true,
-  requireChecksum: false, // Only verify if checksum is present
-  requireSignature: false,
-  trustedSigners: [],
+  inspectBeforeInstall: true,
+  trustBundledSkills: true,
+  trustedSkills: [],
+  quickCheckOnly: false,
+  blockCritical: true,
 };
 
 /**
@@ -105,7 +106,9 @@ export function getDefaultSecurityPolicy(): SecurityPolicyConfig {
  * 2. User config
  * 3. Default values
  */
-export function getSecurityPolicyConfig(userConfig?: Partial<SecurityPolicyConfig>): SecurityPolicyConfig {
+export function getSecurityPolicyConfig(
+  userConfig?: Partial<SecurityPolicyConfig>,
+): SecurityPolicyConfig {
   const defaults = getDefaultSecurityPolicy();
   const hardened = getHardenedDefaults();
 
