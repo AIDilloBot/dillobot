@@ -521,8 +521,10 @@ const pairingHint = (() => {
 **`src/agents/claude-code-sdk-stream.ts`:** (DilloBot-only file)
 - `createClaudeCodeSdkStreamFn()` - Creates a streamFn that uses Claude SDK
 - `resolveStreamFnForProvider()` - Returns SDK streamFn for claude-code-agent, default otherwise
+- `stripToolUseXml()` - Removes `<tool_use>` XML blocks from output (SDK shows these for CLI use)
 - Adapts SDK streaming events to pi-ai's `AssistantMessageEventStream` format
 - Configures SDK with `tools: []`, `maxTurns: 1`, `persistSession: false` for single-turn completion
+- Strips Claude Code's tool-use display XML for clean chatbot output
 
 **`src/agents/pi-embedded-runner/run/attempt.ts`:** (MINIMAL CHANGE - sync-safe)
 - Line ~90: Import `resolveStreamFnForProvider` from claude-code-sdk-stream.ts

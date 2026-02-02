@@ -39,6 +39,27 @@ async function loadSdk() {
 }
 
 /**
+ * Strip Claude Code's tool_use XML blocks from text output.
+ *
+ * The SDK outputs <tool_use>...</tool_use> blocks as part of its text
+ * when showing what it's doing. For chatbot use, we want clean output
+ * without these internal mechanics visible.
+ */
+function stripToolUseXml(text: string): string {
+  // Strip <tool_use>...</tool_use> blocks (including nested content)
+  // This regex handles multi-line tool_use blocks
+  let result = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, "");
+
+  // Also strip standalone tool tags that might appear
+  result = result.replace(/<\/?tool_(?:use|name|result)>/g, "");
+
+  // Clean up excessive whitespace left behind
+  result = result.replace(/\n{3,}/g, "\n\n").trim();
+
+  return result;
+}
+
+/**
  * Format pi-ai messages into a prompt string for the SDK.
  *
  * Since the SDK expects a single prompt, we need to format the
@@ -366,10 +387,23 @@ async function processSdkQuery(
 
     // Emit text_end if we had text content
     if (currentTextIndex >= 0) {
+      // DILLOBOT: Strip Claude Code's tool_use XML blocks from output
+      // This is necessary because the SDK outputs these as part of its "show your work" behavior
+      const cleanText = stripToolUseXml(currentText);
+      console.log(
+        "[DilloBot SDK Stream] Stripping XML. Before:",
+        currentText.length,
+        "After:",
+        cleanText.length,
+      );
+
+      // Update the partial message with clean text
+      (partialMessage.content[currentTextIndex] as TextContent).text = cleanText;
+
       stream.push({
         type: "text_end",
         contentIndex: currentTextIndex,
-        content: currentText,
+        content: cleanText,
         partial: partialMessage,
       });
     }
@@ -406,6 +440,7 @@ export function createClaudeCodeSdkStreamFn() {
     context: Context,
     options?: SimpleStreamOptions,
   ): ReturnType<typeof createAssistantMessageEventStream> {
+    console.log("[DilloBot SDK Stream] Creating stream for model:", model.id);
     const stream = createAssistantMessageEventStream();
 
     // Build the prompt from message history
@@ -421,10 +456,17 @@ export function createClaudeCodeSdkStreamFn() {
       prompt = latestMessage;
     }
 
+    console.log("[DilloBot SDK Stream] Prompt:", prompt.substring(0, 200) + "...");
+    console.log("[DilloBot SDK Stream] System prompt length:", context.systemPrompt?.length ?? 0);
+
     // Start processing asynchronously
     loadSdk()
-      .then((sdk) => processSdkQuery(sdk, prompt, context.systemPrompt, model, options, stream))
+      .then((sdk) => {
+        console.log("[DilloBot SDK Stream] SDK loaded, starting query");
+        return processSdkQuery(sdk, prompt, context.systemPrompt, model, options, stream);
+      })
       .catch((error) => {
+        console.error("[DilloBot SDK Stream] Error:", error);
         const errorMessage: AssistantMessage = {
           role: "assistant",
           content: [],
@@ -480,7 +522,11 @@ export function resolveStreamFnForProvider(
   provider: string,
   defaultStreamFn: ReturnType<typeof createClaudeCodeSdkStreamFn>,
 ): ReturnType<typeof createClaudeCodeSdkStreamFn> {
-  if (isClaudeCodeSdkProvider(provider)) {
+  const isClaudeCode = isClaudeCodeSdkProvider(provider);
+  console.log(
+    `[DilloBot] resolveStreamFnForProvider: provider=${provider} isClaudeCode=${isClaudeCode}`,
+  );
+  if (isClaudeCode) {
     return createClaudeCodeSdkStreamFn();
   }
   return defaultStreamFn;
