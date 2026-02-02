@@ -111,6 +111,27 @@ export function renderOverview(props: OverviewProps) {
       </div>
     `;
   })();
+  // DILLOBOT: Pairing hint for when device pairing is required
+  const pairingHint = (() => {
+    if (props.connected || !props.lastError) return null;
+    const lower = props.lastError.toLowerCase();
+    if (!lower.includes("pairing required")) return null;
+    return html`
+      <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
+        <div style="font-weight: 500; margin-bottom: 8px;">Device Pairing Required</div>
+        <div class="muted" style="margin-bottom: 8px">
+          Your browser needs to be paired with the gateway. Run these commands in your terminal:
+        </div>
+        <div style="font-family: monospace; font-size: 12px; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+          <div style="color: var(--text-muted);"># List pending pairing requests</div>
+          <div>dillobot devices local-list</div>
+          <div style="margin-top: 8px; color: var(--text-muted);"># Approve this browser (use the requestId from above)</div>
+          <div>dillobot devices local-approve &lt;requestId&gt;</div>
+        </div>
+        <div class="muted">Then refresh this page to reconnect.</div>
+      </div>
+    `;
+  })();
 
   return html`
     <section class="grid grid-cols-2">
@@ -201,6 +222,7 @@ export function renderOverview(props: OverviewProps) {
               <div>${props.lastError}</div>
               ${authHint ?? ""}
               ${insecureContextHint ?? ""}
+              ${pairingHint ?? ""}
             </div>`
             : html`
                 <div class="callout" style="margin-top: 14px">
