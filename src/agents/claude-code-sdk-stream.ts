@@ -54,8 +54,24 @@ function stripToolUseXml(text: string): string {
   // Strip <tool_use>...</tool_use> XML blocks (including nested content)
   result = result.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, "");
 
+  // Strip tool:exec with XML-style command blocks
+  // Format:
+  //   tool:exec
+  //   <command>...</command>
+  //   </tool:exec>
+  result = result.replace(
+    /tool:exec\s*\n\s*<command>[\s\S]*?<\/command>\s*\n?\s*<\/tool:exec>/gi,
+    "",
+  );
+
+  // Strip any tool:name ... </tool:name> hybrid blocks
+  result = result.replace(/tool:[a-z_-]+\s*\n[\s\S]*?<\/tool:[a-z_-]+>/gi, "");
+
   // Strip standalone tool XML tags
   result = result.replace(/<\/?tool_(?:use|name|result)>/g, "");
+
+  // Strip <command>...</command> blocks that might be orphaned
+  result = result.replace(/<command>[\s\S]*?<\/command>/gi, "");
 
   // DILLOBOT: Strip text-format tool invocations
   // Format: "tool:toolname" followed by arguments/output on subsequent lines
