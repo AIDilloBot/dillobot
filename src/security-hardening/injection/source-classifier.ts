@@ -84,15 +84,16 @@ const SOURCE_TRUST_CONFIG: Record<
 
 /**
  * Session key patterns for source detection.
+ * Order matters - more specific patterns should come first.
  */
 const SESSION_KEY_PATTERNS: Array<{ pattern: RegExp; source: ContentSource }> = [
-  // Email hooks
+  // Email hooks (must come before generic hook pattern)
   { pattern: /^hook:gmail:/i, source: "email" },
   { pattern: /^hook:email:/i, source: "email" },
   { pattern: /^hook:outlook:/i, source: "email" },
   { pattern: /^email:/i, source: "email" },
 
-  // Webhooks
+  // Webhooks (must come before agent pattern since hooks are external)
   { pattern: /^hook:webhook:/i, source: "webhook" },
   { pattern: /^hook:/i, source: "webhook" }, // Generic hook fallback
   { pattern: /^webhook:/i, source: "webhook" },
@@ -110,6 +111,11 @@ const SESSION_KEY_PATTERNS: Array<{ pattern: RegExp; source: ContentSource }> = 
 
   // Skills
   { pattern: /^skill:/i, source: "skill" },
+
+  // DILLOBOT: Agent session keys are trusted user_direct input
+  // These come from authenticated messaging channels (Slack, Telegram, Discord, webchat, etc.)
+  // Format: agent:{agentId}:{channel}:{type}:{peerId} or agent:{agentId}:main
+  { pattern: /^agent:/i, source: "user_direct" },
 ];
 
 /**
