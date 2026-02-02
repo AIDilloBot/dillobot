@@ -79,6 +79,23 @@ export {
   type ContentSecurityContext,
 } from "./injection/content-security.js";
 
+// Security gate (LLM-based out-of-band analysis)
+export {
+  runSecurityGate,
+  shouldBlockQuickly,
+  type SecurityGateResult,
+  type SecurityGateConfig,
+} from "./injection/security-gate.js";
+
+// LLM security provider
+export {
+  isClaudeAgentSdkProvider,
+  createClaudeCliSecurityProvider,
+  createAnthropicSecurityProvider,
+  createOpenAICompatibleSecurityProvider,
+  resolveSecurityLLMProvider,
+} from "./injection/llm-security-provider.js";
+
 // Skill inspection (LLM-based)
 export {
   verifySkillForInstallation,

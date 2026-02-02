@@ -162,50 +162,71 @@ if (claudeCodeAvailable) {
 
 ---
 
-### 7. Central Dispatch Security Integration
+### 7. Central Dispatch Security Integration (Out-of-Band LLM Security Gate)
 
 **File:** `src/auto-reply/dispatch.ts`
 
 **Imports Required:**
 ```typescript
-import {
-  processContentSecurity,
-  shouldBlockImmediately,
-  type ContentSecurityConfig,
-} from "../security-hardening/index.js";
+import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { logWarn } from "../logger.js";
+import { runSecurityGate } from "../security-hardening/injection/security-gate.js";
 ```
 
-**Security Parameter Required** in `dispatchInboundMessage`:
+**LLM Provider Parameter Required** in `dispatchInboundMessage`:
 ```typescript
-/** DILLOBOT: Security config overrides */
-securityConfig?: Partial<ContentSecurityConfig>;
+/** LLM provider for security analysis (e.g., "claude-code-agent", "anthropic") */
+llmProvider?: string;
 ```
 
 **Security Processing Required** at start of `dispatchInboundMessage` (after `finalizeInboundContext`):
 ```typescript
-// DILLOBOT: Process content through security pipeline
+// DILLOBOT: Run security gate with LLM analysis
+// This checks content OUT-OF-BAND - the agent never sees blocked content
 const sessionKey = finalized.SessionKey ?? "unknown";
 const bodyToCheck = finalized.BodyForAgent ?? finalized.Body ?? "";
 
-// Quick check for critical patterns that should block immediately
-const quickBlock = shouldBlockImmediately(bodyToCheck);
-if (quickBlock.block) {
-  logWarn(`[security] BLOCKED inbound message...`);
-  return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
-}
+// Resolve the LLM provider for security analysis
+const provider = params.llmProvider ?? DEFAULT_PROVIDER;
 
-// Run full security processing
-const securityResult = await processContentSecurity(bodyToCheck, {...});
+// Run the security gate
+const securityResult = await runSecurityGate(bodyToCheck, {
+  provider,
+  sessionKey,
+  senderId: finalized.From,
+  channel: finalized.ChatType,
+  apiKeys: {
+    anthropic: params.cfg.models?.providers?.anthropic?.apiKey,
+    openai: params.cfg.models?.providers?.openai?.apiKey,
+  },
+  enableLLMAnalysis: params.cfg.security?.llmAnalysis?.enabled !== false,
+});
+
+// If blocked, alert the user and don't process
 if (securityResult.blocked) {
+  logWarn(
+    `[security-gate] BLOCKED: ${securityResult.blockReason} ` +
+      `(session=${sessionKey}, from=${finalized.From})`,
+  );
+
+  // Send alert to user via the dispatcher
+  if (securityResult.alertMessage) {
+    params.dispatcher.sendFinalReply({ text: securityResult.alertMessage });
+  }
+
+  // Return early - the agent NEVER sees this content
   return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
 }
 
-// Use processed content if modified
-if (securityResult.processedContent !== bodyToCheck) {
-  finalized.BodyForAgent = securityResult.processedContent;
-}
+// Content passed security gate - proceed with agent processing
+// NOTE: Agent receives CLEAN content, no security markers
 ```
+
+**Key Features:**
+- **Out-of-band analysis:** Security checks run separately from the agent context - the agent never sees blocked content
+- **LLM-based detection:** Uses Claude Code CLI (`claude -p`) when provider is "claude-code-agent", otherwise uses configured LLM provider
+- **User alerts:** When attacks are blocked, alerts are sent via the dispatcher to the user
+- **No content wrapping:** Agent receives clean content without security markers that could pollute context
 
 **Why:** This is the central entry point for ALL message channels. Security processing here protects Discord, Slack, Telegram, Signal, Line, iMessage, WhatsApp, webhooks, API, and web interface.
 
@@ -307,8 +328,8 @@ After any upstream sync, verify:
 9. [ ] `/src/agents/claude-code-sdk-runner.ts` exists
 10. [ ] `/src/config/types.security.ts` exists
 11. [ ] `dillobot` CLI alias in package.json bin section
-12. [ ] `processContentSecurity` called in dispatch.ts (central security integration)
-13. [ ] `shouldBlockImmediately` called in dispatch.ts (quick filter)
+12. [ ] `runSecurityGate` called in dispatch.ts (out-of-band LLM security)
+13. [ ] `security-gate.ts` and `llm-security-provider.ts` exist in injection/
 14. [ ] Security imports present in cron/isolated-agent/run.ts
 15. [ ] `SubscriptionCredential` type in auth-profiles/types.ts
 16. [ ] `"subscription"` in AuthProfileConfig.mode (types.auth.ts)

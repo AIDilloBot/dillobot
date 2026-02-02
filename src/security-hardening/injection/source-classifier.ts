@@ -116,6 +116,17 @@ const SESSION_KEY_PATTERNS: Array<{ pattern: RegExp; source: ContentSource }> = 
   // These come from authenticated messaging channels (Slack, Telegram, Discord, webchat, etc.)
   // Format: agent:{agentId}:{channel}:{type}:{peerId} or agent:{agentId}:main
   { pattern: /^agent:/i, source: "user_direct" },
+
+  // DILLOBOT: Direct messaging channel session keys are also trusted
+  // These may be used in some code paths before being prefixed with agent:
+  { pattern: /^telegram:/i, source: "user_direct" },
+  { pattern: /^slack:/i, source: "user_direct" },
+  { pattern: /^discord:/i, source: "user_direct" },
+  { pattern: /^signal:/i, source: "user_direct" },
+  { pattern: /^whatsapp:/i, source: "user_direct" },
+  { pattern: /^imessage:/i, source: "user_direct" },
+  { pattern: /^webchat:/i, source: "user_direct" },
+  { pattern: /^sms:/i, source: "user_direct" },
 ];
 
 /**

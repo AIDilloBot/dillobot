@@ -2,12 +2,9 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { DispatchFromConfigResult } from "./reply/dispatch-from-config.js";
 import type { FinalizedMsgContext, MsgContext } from "./templating.js";
 import type { GetReplyOptions } from "./types.js";
+import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { logWarn } from "../logger.js";
-import {
-  processContentSecurity,
-  shouldBlockImmediately,
-  type ContentSecurityConfig,
-} from "../security-hardening/index.js";
+import { runSecurityGate } from "../security-hardening/injection/security-gate.js";
 import { dispatchReplyFromConfig } from "./reply/dispatch-from-config.js";
 import { finalizeInboundContext } from "./reply/inbound-context.js";
 import {
@@ -26,78 +23,59 @@ export async function dispatchInboundMessage(params: {
   dispatcher: ReplyDispatcher;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
-  /** DILLOBOT: Security config overrides */
-  securityConfig?: Partial<ContentSecurityConfig>;
+  /** LLM provider for security analysis (e.g., "claude-code-agent", "anthropic") */
+  llmProvider?: string;
 }): Promise<DispatchInboundResult> {
   const finalized = finalizeInboundContext(params.ctx);
 
-  // DILLOBOT: Process content through security pipeline
+  // DILLOBOT: Run security gate with LLM analysis
+  // This checks content OUT-OF-BAND - the agent never sees blocked content
   const sessionKey = finalized.SessionKey ?? "unknown";
   const bodyToCheck = finalized.BodyForAgent ?? finalized.Body ?? "";
 
-  // Quick check for critical patterns that should block immediately
-  const quickBlock = shouldBlockImmediately(bodyToCheck);
-  if (quickBlock.block) {
-    logWarn(
-      `[security] BLOCKED inbound message due to critical security pattern ` +
-        `(session=${sessionKey}, from=${finalized.From}): ${quickBlock.reason}`,
-    );
-    // Return early without processing - message is blocked
-    return {
-      queuedFinal: false,
-      counts: { tool: 0, block: 0, final: 0 },
-    };
-  }
+  // Resolve the LLM provider for security analysis
+  const provider = params.llmProvider ?? DEFAULT_PROVIDER;
 
-  // Run full security processing
-  const securityResult = await processContentSecurity(
-    bodyToCheck,
-    {
-      sessionKey,
-      senderId: finalized.From,
-      channel: finalized.ChatType,
-      metadata: {
-        accountId: finalized.AccountId,
-        messageSid: finalized.MessageSid,
-      },
+  // Run the security gate
+  const securityResult = await runSecurityGate(bodyToCheck, {
+    provider,
+    sessionKey,
+    senderId: finalized.From,
+    channel: finalized.ChatType,
+    apiKeys: {
+      anthropic: params.cfg.models?.providers?.anthropic?.apiKey,
+      openai: params.cfg.models?.providers?.openai?.apiKey,
     },
-    undefined, // LLM provider not available at this point
-    {
-      enabled: true,
-      llmAnalysisEnabled: false, // Disable LLM analysis (no provider here)
-      blockOnCriticalPatterns: true,
-      wrapExternalContent: true,
-      stripUnicode: true,
-      logEvents: true,
-      ...params.securityConfig,
-    },
-  );
+    enableLLMAnalysis: params.cfg.security?.llmAnalysis?.enabled !== false,
+  });
 
-  // Check if blocked by security
+  // If blocked, alert the user and don't process
   if (securityResult.blocked) {
     logWarn(
-      `[security] BLOCKED inbound message: ${securityResult.blockReason} ` +
+      `[security-gate] BLOCKED: ${securityResult.blockReason} ` +
         `(session=${sessionKey}, from=${finalized.From})`,
     );
-    // Return early without processing - message is blocked
+
+    // Send alert to user via the dispatcher
+    if (securityResult.alertMessage) {
+      try {
+        params.dispatcher.sendFinalReply({ text: securityResult.alertMessage });
+      } catch (alertError) {
+        logWarn(
+          `[security-gate] Failed to send alert: ${alertError instanceof Error ? alertError.message : String(alertError)}`,
+        );
+      }
+    }
+
+    // Return early - the agent NEVER sees this content
     return {
       queuedFinal: false,
       counts: { tool: 0, block: 0, final: 0 },
     };
   }
 
-  // Log warnings
-  if (securityResult.hasWarnings) {
-    for (const warning of securityResult.warnings) {
-      logWarn(`[security] ${warning} (session=${sessionKey})`);
-    }
-  }
-
-  // Use processed content if it was modified (wrapped/sanitized)
-  if (securityResult.processedContent !== bodyToCheck) {
-    finalized.BodyForAgent = securityResult.processedContent;
-  }
-
+  // Content passed security gate - proceed with agent processing
+  // NOTE: Agent receives CLEAN content, no security markers
   return await dispatchReplyFromConfig({
     ctx: finalized,
     cfg: params.cfg,

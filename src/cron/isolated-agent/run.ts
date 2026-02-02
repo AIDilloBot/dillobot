@@ -275,9 +275,9 @@ export async function runCronIsolatedAgentTurn(params: {
       };
     }
 
-    // Run full content security processing (quick filter + wrapping)
-    // Note: LLM analysis is not performed here since we don't have a provider yet.
-    // The LLM analysis can be added when the provider is available in the execution context.
+    // Run content security analysis (detection only - do NOT wrap content)
+    // Wrapping pollutes the agent's context with security patterns, which can
+    // cause hallucinations. Instead, we detect and block/warn but pass clean content.
     const securityResult = await processContentSecurity(
       params.message,
       {
@@ -285,13 +285,13 @@ export async function runCronIsolatedAgentTurn(params: {
         channel: "cron",
         metadata: { jobId: params.job.id, jobName: params.job.name },
       },
-      undefined, // LLM provider - could be passed in if available
+      undefined, // LLM provider - will be wired for out-of-band analysis
       {
         enabled: true,
-        llmAnalysisEnabled: false, // Disable LLM analysis for now (no provider available here)
+        llmAnalysisEnabled: false, // LLM analysis runs out-of-band, not here
         blockOnCriticalPatterns: true,
-        wrapExternalContent: true,
-        stripUnicode: true,
+        wrapExternalContent: false, // NEVER wrap - don't pollute agent context
+        stripUnicode: false, // Don't modify content
         logEvents: true,
       },
     );
@@ -313,17 +313,15 @@ export async function runCronIsolatedAgentTurn(params: {
       );
     }
 
-    // Use the security-processed content with wrapping
+    // Use clean content without security wrappers
+    // The agent receives the original content - security analysis is for blocking only
     const hookType = getHookType(baseSessionKey);
-    const safeContent = buildSafeExternalPrompt({
-      content: securityResult.processedContent,
-      source: hookType,
-      jobName: params.job.name,
-      jobId: params.job.id,
-      timestamp: formattedTime,
-    });
+    const sourceLabel =
+      hookType === "email" ? "Email" : hookType === "webhook" ? "Webhook" : "External";
 
-    commandBody = `${safeContent}\n\n${timeLine}`.trim();
+    // Simple metadata prefix (no security warnings that teach the model about injection)
+    commandBody =
+      `[${sourceLabel} content - ${params.job.name}]\n\n${params.message}\n\n${timeLine}`.trim();
   } else {
     // Internal/trusted source - use original format
     commandBody = `${base}\n${timeLine}`.trim();

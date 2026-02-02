@@ -21,6 +21,11 @@ import type {
   ToolCall,
 } from "@mariozechner/pi-ai";
 import { createAssistantMessageEventStream } from "@mariozechner/pi-ai/dist/utils/event-stream.js";
+import type { AnyAgentTool } from "./tools/common.js";
+import {
+  createOpenClawMcpServer,
+  type McpSdkServerConfigWithInstance,
+} from "./claude-code-sdk-mcp.js";
 import { isClaudeCodeSdkProvider } from "./claude-code-sdk-runner.js";
 
 /**
@@ -164,6 +169,14 @@ function stripToolUseXml(text: string): string {
     "",
   );
 
+  // Strip transient progress indicators (⏳ Running ... / ✓ summary)
+  // These are emitted during tool execution for real-time feedback but shouldn't appear in final output
+  result = result.replace(/\n*_⏳[^_]*_\n*/g, "\n");
+  result = result.replace(/\n*_✓[^_]*_\n*/g, "\n");
+
+  // Also strip "_Working..._" status messages
+  result = result.replace(/\n*_Working\.\.\._\n*/g, "\n");
+
   // Clean up excessive whitespace left behind
   result = result.replace(/\n{3,}/g, "\n\n").trim();
 
@@ -245,11 +258,21 @@ async function processSdkQuery(
   prompt: string,
   systemPrompt: string | undefined,
   toolsConfig: SdkToolsConfig,
+  openclawTools: AnyAgentTool[] | undefined,
   model: Model<any>,
   options: SimpleStreamOptions | undefined,
   stream: ReturnType<typeof createAssistantMessageEventStream>,
 ): Promise<void> {
   const abortController = new AbortController();
+
+  // Create MCP server for OpenClaw tools if available
+  let mcpServers: Record<string, McpSdkServerConfigWithInstance> | undefined;
+  if (openclawTools && openclawTools.length > 0) {
+    const mcpServer = await createOpenClawMcpServer(openclawTools);
+    if (mcpServer) {
+      mcpServers = { "openclaw-tools": mcpServer };
+    }
+  }
 
   // Link to provided abort signal
   if (options?.signal) {
@@ -285,6 +308,7 @@ async function processSdkQuery(
   let lastEmittedLength = 0; // Track what we've already streamed to the user
   let textStartEmitted = false; // Track if we've emitted text_start for current block
   let isInToolExecution = false; // Track if we're waiting for tool results
+  const toolProgressEmitted = new Set<string>(); // Track tools we've shown progress for
 
   try {
     // Configure the SDK for full agentic loop
@@ -300,8 +324,10 @@ async function processSdkQuery(
       options: {
         abortController,
         model: model.id,
-        // DILLOBOT: Use preset tools so SDK can execute Claude Code tools internally
+        // Use preset tools so SDK can execute Claude Code tools internally
         tools: toolsConfig,
+        // Add OpenClaw tools via MCP server (cron, message, sessions, etc.)
+        mcpServers,
         // Let Claude work until done - no artificial turn limit
         maxTurns: 100,
         // Don't persist to SDK session files - OpenClaw manages sessions
@@ -328,6 +354,83 @@ async function processSdkQuery(
       // Handle user message (tool result) - indicates tool execution in progress
       if (message.type === "user") {
         isInToolExecution = true;
+        continue;
+      }
+
+      // Handle tool_progress - shows real-time feedback during tool execution
+      // This is emitted periodically while a tool is running
+      if (message.type === "tool_progress") {
+        const toolProgress = message as {
+          tool_name?: string;
+          tool_use_id?: string;
+          elapsed_time_seconds?: number;
+        };
+        const toolName = toolProgress.tool_name ?? "tool";
+        const toolId = toolProgress.tool_use_id ?? "";
+        const elapsed = toolProgress.elapsed_time_seconds ?? 0;
+
+        // Only show progress once per tool, when elapsed >= 2s
+        // This avoids spamming while still giving feedback for long operations
+        const progressKey = `${toolId}-${toolName}`;
+        if (elapsed >= 2 && !toolProgressEmitted.has(progressKey)) {
+          toolProgressEmitted.add(progressKey);
+
+          // First, flush any accumulated text so user sees it before tool runs
+          if (currentTextIndex >= 0 && textStartEmitted && currentText.trim()) {
+            const cleanedForFlush = stripToolSyntaxLight(currentText).trim();
+            if (cleanedForFlush && cleanedForFlush.length > lastEmittedLength) {
+              (partialMessage.content[currentTextIndex] as TextContent).text = cleanedForFlush;
+              stream.push({
+                type: "text_end",
+                contentIndex: currentTextIndex,
+                content: cleanedForFlush,
+                partial: partialMessage,
+              });
+              // Reset for the progress message
+              lastEmittedLength = cleanedForFlush.length;
+            }
+          }
+
+          // Now emit progress indicator
+          // This will be sent as a separate message showing the tool is running
+          if (currentTextIndex < 0) {
+            currentTextIndex = partialMessage.content.length;
+            partialMessage.content.push({ type: "text", text: "" });
+          }
+          if (!textStartEmitted) {
+            stream.push({
+              type: "text_start",
+              contentIndex: currentTextIndex,
+              partial: partialMessage,
+            });
+            textStartEmitted = true;
+          }
+
+          const progressText = `_⏳ Running ${toolName}..._`;
+          stream.push({
+            type: "text_delta",
+            contentIndex: currentTextIndex,
+            delta: progressText,
+            partial: partialMessage,
+          });
+          // Emit text_end to flush the progress indicator immediately
+          stream.push({
+            type: "text_end",
+            contentIndex: currentTextIndex,
+            content: progressText,
+            partial: partialMessage,
+          });
+          // Reset for next text block
+          currentTextIndex = -1;
+          textStartEmitted = false;
+        }
+        continue;
+      }
+
+      // Handle tool_use_summary - marks end of tool execution
+      // We don't emit the summary text since Claude's response will describe results
+      if (message.type === "tool_use_summary") {
+        isInToolExecution = false;
         continue;
       }
 
@@ -625,6 +728,10 @@ export function createClaudeCodeSdkStreamFn() {
     // Get SDK tools configuration for proper tool_use output
     const toolsConfig = getSdkToolsConfig(context.tools);
 
+    // Extract OpenClaw tools to expose via MCP
+    // These are the custom tools (cron, message, sessions, etc.) that the SDK doesn't have built-in
+    const openclawTools = context.tools as AnyAgentTool[] | undefined;
+
     // Start processing asynchronously
     loadSdk()
       .then((sdk) => {
@@ -633,6 +740,7 @@ export function createClaudeCodeSdkStreamFn() {
           prompt,
           context.systemPrompt,
           toolsConfig,
+          openclawTools,
           model,
           options,
           stream,

@@ -7,7 +7,12 @@
 /**
  * Vault backend options.
  */
-export type SecurityVaultBackend = "auto" | "keychain" | "credential-manager" | "secret-service" | "aes-fallback";
+export type SecurityVaultBackend =
+  | "auto"
+  | "keychain"
+  | "credential-manager"
+  | "secret-service"
+  | "aes-fallback";
 
 /**
  * Injection filter mode.
@@ -81,6 +86,18 @@ export type SecurityConnectionConfig = {
 };
 
 /**
+ * LLM-based security analysis configuration.
+ */
+export type SecurityLLMAnalysisConfig = {
+  /** Enable LLM-based security analysis for low-trust content */
+  enabled?: boolean;
+  /** Risk level threshold for blocking ("high" or "critical") */
+  blockThreshold?: "medium" | "high" | "critical";
+  /** Risk level threshold for warning */
+  warnThreshold?: "low" | "medium" | "high";
+};
+
+/**
  * Complete security configuration.
  */
 export type SecurityConfig = {
@@ -94,6 +111,8 @@ export type SecurityConfig = {
   skills?: SecuritySkillsConfig;
   /** Connection security configuration */
   connections?: SecurityConnectionConfig;
+  /** LLM-based security analysis configuration */
+  llmAnalysis?: SecurityLLMAnalysisConfig;
 };
 
 /**
@@ -126,5 +145,10 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   connections: {
     requireChallengeForLocal: true,
     maxPairingRequestsPerHour: 10,
+  },
+  llmAnalysis: {
+    enabled: true,
+    blockThreshold: "high",
+    warnThreshold: "medium",
   },
 };

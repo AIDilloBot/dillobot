@@ -159,6 +159,21 @@ if [ -d "src/security-hardening" ]; then
         echo "   ❌ injection/content-security.ts missing (unified entry point)"
         ERRORS=$((ERRORS + 1))
     fi
+
+    # Check security gate (out-of-band LLM analysis)
+    if [ -f "src/security-hardening/injection/security-gate.ts" ]; then
+        echo "   ✅ injection/security-gate.ts (out-of-band LLM security)"
+    else
+        echo "   ❌ injection/security-gate.ts missing (out-of-band LLM security)"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if [ -f "src/security-hardening/injection/llm-security-provider.ts" ]; then
+        echo "   ✅ injection/llm-security-provider.ts (LLM provider abstraction)"
+    else
+        echo "   ❌ injection/llm-security-provider.ts missing (LLM provider abstraction)"
+        ERRORS=$((ERRORS + 1))
+    fi
 else
     echo "❌ CRITICAL: security-hardening module missing!"
     ERRORS=$((ERRORS + 1))
@@ -370,19 +385,26 @@ fi
 # Check 9: Central dispatch security integration
 echo ""
 echo "Checking central dispatch security integration..."
-if grep -q "processContentSecurity" src/auto-reply/dispatch.ts 2>/dev/null; then
-    echo "✅ processContentSecurity integrated in dispatch.ts"
+if grep -q "runSecurityGate" src/auto-reply/dispatch.ts 2>/dev/null; then
+    echo "✅ runSecurityGate integrated in dispatch.ts (out-of-band LLM security)"
 else
-    echo "❌ CRITICAL: processContentSecurity missing from dispatch.ts!"
-    echo "   This is required to protect ALL message channels."
+    echo "❌ CRITICAL: runSecurityGate missing from dispatch.ts!"
+    echo "   This is required to protect ALL message channels with LLM-based analysis."
     ERRORS=$((ERRORS + 1))
 fi
 
-if grep -q "shouldBlockImmediately" src/auto-reply/dispatch.ts 2>/dev/null; then
-    echo "✅ shouldBlockImmediately integrated in dispatch.ts"
+if grep -q "securityResult.blocked" src/auto-reply/dispatch.ts 2>/dev/null; then
+    echo "✅ Security blocking logic present in dispatch.ts"
 else
-    echo "❌ CRITICAL: shouldBlockImmediately missing from dispatch.ts!"
+    echo "❌ CRITICAL: Security blocking logic missing from dispatch.ts!"
     ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "sendFinalReply.*alertMessage" src/auto-reply/dispatch.ts 2>/dev/null; then
+    echo "✅ Security alert notification integrated in dispatch.ts"
+else
+    echo "⚠️  WARNING: Security alert notification may be missing from dispatch.ts"
+    WARNINGS=$((WARNINGS + 1))
 fi
 
 # Check 10: Cron/isolated agent security integration
