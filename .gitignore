@@ -72,13 +72,6 @@ USER.md
 # local tooling
 .serena/
 
-# DilloBot landing page (private)
-website/
-
-# DilloBot local sync scripts (contains local paths)
-scripts/sync/install-cron.sh
+# DilloBot local sync artifacts (generated files)
 sync-report-*.md
 dillobot-sync.log
-
-# DilloBot publish script (private)
-scripts/publish-npm.sh

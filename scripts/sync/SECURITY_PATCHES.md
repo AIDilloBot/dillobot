@@ -285,3 +285,36 @@ After any upstream sync, verify:
 14. [ ] Security imports present in cron/isolated-agent/run.ts
 15. [ ] `SubscriptionCredential` type in auth-profiles/types.ts
 16. [ ] `"subscription"` in AuthProfileConfig.mode (types.auth.ts)
+17. [ ] DilloBot branding in banner.ts (not OpenClaw)
+18. [ ] DilloBot branding in dashboard.ts
+19. [ ] Process title "dillobot" in entry.ts
+20. [ ] `src/dillobot-version.ts` exists with upstream version
+
+---
+
+### 10. DilloBot Branding
+
+**Purpose:** Users must know they are running DilloBot, not OpenClaw. The CLI displays "DilloBot" with the upstream OpenClaw version it's based on.
+
+**Files with `// DILLOBOT-BRANDING-*` markers:**
+
+**`src/cli/banner.ts`:**
+- Import from `../dillobot-version.js`
+- Title shows `🛡️ DilloBot` instead of `🦞 OpenClaw`
+- Banner shows `[OpenClaw vX.X.X]` to indicate upstream version
+- ASCII art says "DILLOBOT" with "Armored AI. No compromises."
+
+**`src/cli/tagline.ts`:**
+- Default tagline: "Armored AI. No compromises."
+
+**`src/commands/dashboard.ts`:**
+- Message says "control DilloBot" not "control OpenClaw"
+
+**`src/entry.ts`:**
+- Process title: `"dillobot"` not `"openclaw"`
+
+**`src/dillobot-version.ts`:**
+- Exports `UPSTREAM_VERSION`, `UPSTREAM_COMMIT`, etc.
+- Auto-updated by sync script
+
+**Why:** Users should clearly know they're running the security-hardened DilloBot fork, not vanilla OpenClaw. The upstream version display helps them understand what base version they're on.

@@ -211,6 +211,44 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 11: DilloBot branding (not OpenClaw)
+echo ""
+echo "Checking DilloBot branding..."
+if [ -f "src/dillobot-version.ts" ]; then
+    echo "✅ src/dillobot-version.ts exists"
+else
+    echo "⚠️  WARNING: src/dillobot-version.ts missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "DILLOBOT-BRANDING" src/cli/banner.ts 2>/dev/null; then
+    echo "✅ DilloBot branding markers in banner.ts"
+else
+    echo "⚠️  WARNING: DilloBot branding missing from banner.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "DILLOBOT_PRODUCT_NAME" src/cli/banner.ts 2>/dev/null; then
+    echo "✅ DilloBot product name imported in banner.ts"
+else
+    echo "⚠️  WARNING: DilloBot product name not imported in banner.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q 'process.title = "dillobot"' src/entry.ts 2>/dev/null; then
+    echo "✅ Process title is 'dillobot' in entry.ts"
+else
+    echo "⚠️  WARNING: Process title may be 'openclaw' instead of 'dillobot'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "control DilloBot" src/commands/dashboard.ts 2>/dev/null; then
+    echo "✅ Dashboard says 'DilloBot' not 'OpenClaw'"
+else
+    echo "⚠️  WARNING: Dashboard may still say 'OpenClaw'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Summary
 echo ""
 echo "=================================="

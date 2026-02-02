@@ -7,7 +7,9 @@ import { isTruthyEnvValue, normalizeEnv } from "./infra/env.js";
 import { installProcessWarningFilter } from "./infra/warnings.js";
 import { attachChildProcessBridge } from "./process/child-process-bridge.js";
 
-process.title = "openclaw";
+// DILLOBOT-BRANDING-START
+process.title = "dillobot";
+// DILLOBOT-BRANDING-END
 installProcessWarningFilter();
 normalizeEnv();
 

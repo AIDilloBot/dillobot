@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DilloBot - Security-Hardened AI Assistant</title>
+    <meta name="description" content="DilloBot is a security-hardened fork of OpenClaw. Armored AI with encrypted vaults, LLM-based injection protection, and enterprise-grade security.">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="noise-overlay"></div>
+    <div class="gradient-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <canvas id="particles"></canvas>
+
+    <nav class="nav">
+        <div class="nav-content">
+            <a href="#top" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 60 60" class="armadillo-logo">
+                        <!-- Armadillo shell segments -->
+                        <ellipse cx="30" cy="32" rx="22" ry="16" fill="url(#shellGradient)" class="shell-main"/>
+                        <path d="M12 28 Q30 20 48 28" stroke="url(#bandGradient)" stroke-width="3" fill="none" class="shell-band band-1"/>
+                        <path d="M10 32 Q30 24 50 32" stroke="url(#bandGradient)" stroke-width="3" fill="none" class="shell-band band-2"/>
+                        <path d="M10 36 Q30 28 50 36" stroke="url(#bandGradient)" stroke-width="3" fill="none" class="shell-band band-3"/>
+                        <path d="M12 40 Q30 32 48 40" stroke="url(#bandGradient)" stroke-width="3" fill="none" class="shell-band band-4"/>
+                        <!-- Head -->
+                        <ellipse cx="48" cy="36" rx="8" ry="6" fill="url(#headGradient)"/>
+                        <circle cx="52" cy="34" r="2" fill="#1a1a1a"/>
+                        <ellipse cx="55" cy="37" rx="3" ry="2" fill="#8B7355"/>
+                        <!-- Tail -->
+                        <path d="M8 36 Q2 38 4 42" stroke="url(#shellGradient)" stroke-width="4" fill="none" stroke-linecap="round"/>
+                        <!-- Legs -->
+                        <ellipse cx="18" cy="46" rx="4" ry="3" fill="#8B7355"/>
+                        <ellipse cx="42" cy="46" rx="4" ry="3" fill="#8B7355"/>
+                        <!-- Shield icon on shell -->
+                        <path d="M30 26 L36 29 L36 35 L30 39 L24 35 L24 29 Z" fill="url(#shieldGradient)" class="shield-icon"/>
+                        <path d="M30 30 L32 31 L32 34 L30 36 L28 34 L28 31 Z" fill="#0a1a0a"/>
+                        <defs>
+                            <linearGradient id="shellGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#C4A574"/>
+                                <stop offset="50%" style="stop-color:#A0826D"/>
+                                <stop offset="100%" style="stop-color:#8B7355"/>
+                            </linearGradient>
+                            <linearGradient id="bandGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:#6B5344"/>
+                                <stop offset="50%" style="stop-color:#8B7355"/>
+                                <stop offset="100%" style="stop-color:#6B5344"/>
+                            </linearGradient>
+                            <linearGradient id="headGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#B8956E"/>
+                                <stop offset="100%" style="stop-color:#8B7355"/>
+                            </linearGradient>
+                            <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#4ade80"/>
+                                <stop offset="100%" style="stop-color:#22c55e"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <span class="logo-text">DilloBot</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#comparison">vs OpenClaw</a>
+                <a href="#sync">Sync</a>
+                <a href="#install">Install</a>
+                <a href="https://github.com/AIDilloBot/dillobot" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero" id="top">
+            <div class="hero-content">
+                <div class="hero-logo">
+                    <img src="logo.svg" alt="DilloBot - Security-hardened fork of OpenClaw" class="hero-logo-img">
+                </div>
+                <div class="hero-badge">
+                    <span class="badge-dot"></span>
+                    <!-- DILLOBOT-VERSION -->Based on OpenClaw <a href="https://github.com/openclaw/openclaw/commit/c429ccb64fc319babf4f8adc95df6d658a2d6b2f" target="_blank" class="version-link">v2026.2.1 (c429ccb)</a><!-- /DILLOBOT-VERSION -->
+                </div>
+                <p class="hero-description">
+                    DilloBot wraps OpenClaw in an impenetrable shell. <strong>Claude Code subscription by default</strong>,
+                    no API key required. When you do use API keys, they're stored in an encrypted vault, never plaintext.
+                    LLM-powered injection detection, mandatory authentication, and
+                    enterprise-grade security policies. Fully compatible with upstream.
+                </p>
+                <div class="hero-cta">
+                    <a href="#install" class="btn btn-primary">
+                        <span>Get Started</span>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                    <a href="https://github.com/AIDilloBot/dillobot" target="_blank" class="btn btn-secondary">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                        View on GitHub
+                    </a>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Plaintext Secrets</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat">
+                        <span class="stat-value">7</span>
+                        <span class="stat-label">Security Layers</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat">
+                        <span class="stat-value">100%</span>
+                        <span class="stat-label">OpenClaw Compatible</span>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="terminal-window">
+                    <div class="terminal-header">
+                        <div class="terminal-buttons">
+                            <span class="terminal-btn red"></span>
+                            <span class="terminal-btn yellow"></span>
+                            <span class="terminal-btn green"></span>
+                        </div>
+                        <span class="terminal-title">dillobot</span>
+                    </div>
+                    <div class="terminal-body">
+                        <div class="terminal-line">
+                            <span class="prompt">$</span>
+                            <span class="command typing">curl -fsSL https://dillo.bot/install.sh | bash</span>
+                        </div>
+                        <div class="terminal-output">
+                            <span class="output-accent">🦞 Snip snip. Installing DilloBot...</span>
+                        </div>
+                        <div class="terminal-output">
+                            <span class="output-success">✓</span> Node.js 22.x detected
+                        </div>
+                        <div class="terminal-output">
+                            <span class="output-success">✓</span> Claude Code SDK detected (no API key needed)
+                        </div>
+                        <div class="terminal-output">
+                            <span class="output-success">✓</span> Encrypted vault initialized
+                        </div>
+                        <div class="terminal-output">
+                            <span class="output-success">✓</span> Security patches verified
+                        </div>
+                        <div class="terminal-line delayed">
+                            <span class="output-accent">🛡️ DilloBot installed. You're armored.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="floating-badges">
+                    <div class="floating-badge badge-1">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                        </svg>
+                        Encrypted
+                    </div>
+                    <div class="floating-badge badge-2">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                        </svg>
+                        Zero-Trust
+                    </div>
+                    <div class="floating-badge badge-3">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        LLM-Verified
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Why DilloBot Section -->
+        <section class="why-section" id="features">
+            <div class="section-header">
+                <h2 class="section-title">Why the hard shell?</h2>
+                <p class="section-subtitle">
+                    OpenClaw is powerful, but it defaults to convenience over security.
+                    DilloBot flips that equation. Security first, always.
+                </p>
+            </div>
+            <div class="mascot-showcase">
+                <div class="mascot-container">
+                    <svg viewBox="0 0 300 200" class="mascot-svg">
+                        <!-- Ground shadow -->
+                        <ellipse cx="150" cy="180" rx="80" ry="12" fill="rgba(0,0,0,0.3)" class="shadow"/>
+
+                        <!-- Armadillo body -->
+                        <g class="armadillo-body">
+                            <!-- Main shell -->
+                            <ellipse cx="150" cy="120" rx="70" ry="50" fill="url(#mascotShellGrad)" class="main-shell"/>
+
+                            <!-- Shell bands -->
+                            <path d="M85 100 Q150 70 215 100" stroke="#6B5344" stroke-width="6" fill="none" class="band"/>
+                            <path d="M80 115 Q150 85 220 115" stroke="#6B5344" stroke-width="6" fill="none" class="band"/>
+                            <path d="M80 130 Q150 100 220 130" stroke="#6B5344" stroke-width="6" fill="none" class="band"/>
+                            <path d="M85 145 Q150 115 215 145" stroke="#6B5344" stroke-width="6" fill="none" class="band"/>
+
+                            <!-- Head -->
+                            <ellipse cx="230" cy="130" rx="25" ry="20" fill="url(#mascotHeadGrad)"/>
+                            <circle cx="242" cy="122" r="6" fill="#1a1a1a"/>
+                            <circle cx="244" cy="120" r="2" fill="#fff"/>
+                            <ellipse cx="252" cy="135" rx="10" ry="7" fill="#9B8265"/>
+                            <circle cx="252" cy="133" r="2" fill="#1a1a1a"/>
+
+                            <!-- Ears -->
+                            <ellipse cx="225" cy="105" rx="8" ry="12" fill="#B8956E"/>
+                            <ellipse cx="235" cy="108" rx="6" ry="10" fill="#B8956E"/>
+
+                            <!-- Tail -->
+                            <path d="M80 130 Q50 140 55 165 Q60 175 70 170" stroke="url(#mascotShellGrad)" stroke-width="12" fill="none" stroke-linecap="round" class="tail"/>
+                            <path d="M80 130 Q50 140 55 165 Q60 175 70 170" stroke="#6B5344" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+                            <!-- Legs -->
+                            <ellipse cx="110" cy="165" rx="12" ry="10" fill="#9B8265"/>
+                            <ellipse cx="190" cy="165" rx="12" ry="10" fill="#9B8265"/>
+                            <ellipse cx="130" cy="170" rx="10" ry="8" fill="#9B8265"/>
+                            <ellipse cx="170" cy="170" rx="10" ry="8" fill="#9B8265"/>
+
+                            <!-- Shield emblem -->
+                            <g class="shield-emblem">
+                                <path d="M150 85 L175 100 L175 125 L150 145 L125 125 L125 100 Z" fill="url(#shieldGlow)" class="shield-glow"/>
+                                <path d="M150 90 L170 102 L170 122 L150 138 L130 122 L130 102 Z" fill="url(#mascotShieldGrad)"/>
+                                <path d="M150 100 L160 106 L160 118 L150 128 L140 118 L140 106 Z" fill="#0a1a0a"/>
+                                <path d="M150 105 L155 108 L155 115 L150 120 L145 115 L145 108 Z" fill="#4ade80" class="shield-check"/>
+                            </g>
+                        </g>
+
+                        <!-- Sparkles -->
+                        <g class="sparkles">
+                            <circle cx="100" cy="80" r="2" fill="#4ade80" class="sparkle s1"/>
+                            <circle cx="200" cy="70" r="2" fill="#22c55e" class="sparkle s2"/>
+                            <circle cx="250" cy="95" r="1.5" fill="#4ade80" class="sparkle s3"/>
+                            <circle cx="60" cy="110" r="1.5" fill="#22c55e" class="sparkle s4"/>
+                        </g>
+
+                        <defs>
+                            <linearGradient id="mascotShellGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#D4B896"/>
+                                <stop offset="50%" style="stop-color:#B8956E"/>
+                                <stop offset="100%" style="stop-color:#9B8265"/>
+                            </linearGradient>
+                            <linearGradient id="mascotHeadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#C9A882"/>
+                                <stop offset="100%" style="stop-color:#9B8265"/>
+                            </linearGradient>
+                            <linearGradient id="mascotShieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#4ade80"/>
+                                <stop offset="100%" style="stop-color:#16a34a"/>
+                            </linearGradient>
+                            <radialGradient id="shieldGlow">
+                                <stop offset="0%" style="stop-color:#4ade80;stop-opacity:0.4"/>
+                                <stop offset="100%" style="stop-color:#4ade80;stop-opacity:0"/>
+                            </radialGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div class="mascot-quote">
+                    <blockquote>"Like an armadillo, I roll into a ball when threatened. Except my ball is AES-256-GCM encryption and LLM-powered threat detection."</blockquote>
+                    <cite>- Dillo, Security Mascot</cite>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Start Section -->
+        <section class="install-section" id="install">
+            <div class="section-header">
+                <h2 class="section-title">⟩ Quick Start</h2>
+                <p class="section-subtitle">One command. Full armor. Let's go.</p>
+            </div>
+
+            <!-- Hero One-Liner -->
+            <div class="install-hero">
+                <div class="install-hero-code">
+                    <div class="code-block code-block-hero">
+                        <span class="code-prompt">$</span>
+                        <code>curl -fsSL https://dillo.bot/install.sh | bash</code>
+                        <button class="copy-btn" data-copy="curl -fsSL https://dillo.bot/install.sh | bash" title="Copy to clipboard">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="install-hero-tagline">Works everywhere. Installs everything. Armors you completely. 🦞</p>
+                </div>
+            </div>
+
+            <!-- Tabbed Install Methods -->
+            <div class="install-tabs-container">
+                <div class="install-tabs">
+                    <button class="install-tab active" data-tab="npm">npm</button>
+                    <button class="install-tab" data-tab="source">From Source</button>
+                    <button class="install-tab" data-tab="windows">Windows</button>
+                </div>
+
+                <div class="install-tab-content active" id="tab-npm">
+                    <div class="tab-description">Already have Node.js? Even faster:</div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>npm i -g dillobot</code>
+                        <button class="copy-btn" data-copy="npm i -g dillobot">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>dillobot onboard</code>
+                        <button class="copy-btn" data-copy="dillobot onboard">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="install-tab-content" id="tab-source">
+                    <div class="tab-description">Want to hack on it? Clone and build:</div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>git clone https://github.com/AIDilloBot/dillobot.git</code>
+                        <button class="copy-btn" data-copy="git clone https://github.com/AIDilloBot/dillobot.git">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>cd dillobot && pnpm install && pnpm build</code>
+                        <button class="copy-btn" data-copy="cd dillobot && pnpm install && pnpm build">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>./install.sh</code>
+                        <button class="copy-btn" data-copy="./install.sh">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="install-tab-content" id="tab-windows">
+                    <div class="tab-description">PowerShell (Run as Administrator):</div>
+                    <div class="code-block">
+                        <span class="code-prompt">></span>
+                        <code>iwr -useb https://dillo.bot/install.ps1 | iex</code>
+                        <button class="copy-btn" data-copy="iwr -useb https://dillo.bot/install.ps1 | iex">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="tab-description" style="margin-top: 1rem;">Or with npm:</div>
+                    <div class="code-block">
+                        <span class="code-prompt">></span>
+                        <code>npm i -g dillobot && dillobot onboard</code>
+                        <button class="copy-btn" data-copy="npm i -g dillobot && dillobot onboard">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platform Support -->
+            <div class="platform-support">
+                <div class="platform-icons">
+                    <span class="platform" title="macOS">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                        </svg>
+                    </span>
+                    <span class="platform" title="Linux">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139zm.529 3.405h.013c.213 0 .396.062.584.198.19.135.33.332.438.533.105.259.158.459.166.724 0-.02.006-.04.006-.06v.105a.086.086 0 01-.004-.021l-.004-.024a1.807 1.807 0 01-.15.706.953.953 0 01-.213.335.71.71 0 00-.088-.042c-.104-.045-.198-.064-.284-.133a1.312 1.312 0 00-.22-.066c.05-.06.146-.133.183-.198.053-.128.082-.264.088-.402v-.02a1.21 1.21 0 00-.061-.4c-.045-.134-.101-.2-.183-.333-.084-.066-.167-.132-.267-.132h-.016c-.093 0-.176.03-.262.132a.8.8 0 00-.205.334 1.18 1.18 0 00-.09.468v.024c.016.066.033.2.066.267.016.066.043.133.08.198a.854.854 0 01-.098.032c-.133.027-.18.003-.164-.197.003-.027.006-.055.006-.08 0-.064.006-.13.013-.2v-.02a1.562 1.562 0 01.156-.706c.095-.2.23-.37.398-.535a.9.9 0 01.59-.2zm-2.962.059h.036c.142 0 .27.048.399.135.146.129.264.288.334.466.09.2.135.4.151.6v.02c.003.04-.006.08-.006.12v.077a.6.6 0 01-.016.178 1.53 1.53 0 01-.303.833c-.049.066-.132.066-.232.066-.168 0-.33-.066-.498-.132a.938.938 0 01-.23-.098c.045-.066.09-.132.132-.2.106-.135.166-.33.166-.528 0-.2-.033-.4-.1-.599a1.256 1.256 0 00-.27-.432c-.082-.066-.166-.1-.283-.1h-.033c-.117 0-.2.033-.283.1a.868.868 0 00-.232.334c-.05.133-.084.266-.084.4v.02c0 .066.013.132.026.2.013.065.023.132.05.197-.1.017-.166.034-.243.034a.51.51 0 01-.183-.035.53.53 0 01-.15-.067 1.57 1.57 0 01.15-.667c.123-.266.305-.467.506-.6a.903.903 0 01.523-.2zm3.77 3.65c.093 0 .166.034.283.1a.936.936 0 01.349.267c.116.135.183.334.216.534.033.2.026.4-.013.6-.026.135-.066.266-.133.4-.1.2-.233.4-.4.533a.833.833 0 01-.516.2h-.016a.847.847 0 01-.5-.2c-.196-.135-.363-.4-.446-.667-.09-.27-.1-.536-.066-.803.026-.27.106-.535.23-.802.106-.196.246-.334.416-.468.103-.066.196-.1.286-.1zm-.73.732a.627.627 0 00-.136.201 1.14 1.14 0 00-.116.399.957.957 0 00.046.534.548.548 0 00.27.333c.05.033.1.066.15.066.084 0 .166-.034.233-.1a.654.654 0 00.183-.333c.026-.135.036-.27.023-.4a.626.626 0 00-.1-.333.493.493 0 00-.236-.2c-.034-.017-.067-.034-.117-.034-.033 0-.067.017-.1.034l-.1.067a.676.676 0 00-.1.132z"/>
+                        </svg>
+                    </span>
+                    <span class="platform" title="Windows">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+                        </svg>
+                    </span>
+                </div>
+                <p class="platform-text">macOS, Linux, Windows, WSL. Node.js 20+ required.</p>
+            </div>
+        </section>
+
+        <!-- Features Grid -->
+        <section class="features-section">
+            <div class="features-grid">
+                <div class="feature-card feature-large">
+                    <div class="feature-icon icon-vault">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            <circle cx="12" cy="16" r="1"/>
+                        </svg>
+                    </div>
+                    <h3>Encrypted Credential Vault</h3>
+                    <p>Credentials never touch plaintext. Platform-native secure storage with AES-256-GCM fallback.</p>
+                    <div class="feature-details">
+                        <div class="detail-row">
+                            <span class="detail-label">macOS</span>
+                            <span class="detail-value">Keychain (hardware-backed)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Windows</span>
+                            <span class="detail-value">Credential Manager (DPAPI)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Linux</span>
+                            <span class="detail-value">Secret Service (libsecret)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Fallback</span>
+                            <span class="detail-value">AES-256-GCM + PBKDF2 (310k iterations)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon icon-shield">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <h3>LLM Injection Protection</h3>
+                    <p>The AI itself detects prompt injection attempts semantically, catching novel attacks regex can't see.</p>
+                    <ul class="feature-list">
+                        <li><strong>Layer 1:</strong> Quick filter (15 critical patterns)</li>
+                        <li><strong>Layer 2:</strong> Source trust classification</li>
+                        <li><strong>Layer 3:</strong> LLM semantic analysis</li>
+                        <li><strong>Layer 4:</strong> Content boundary wrapping</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon icon-key">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        </svg>
+                    </div>
+                    <h3>Mandatory Auth</h3>
+                    <p>Every connection requires cryptographic challenge-response pairing. Even localhost.</p>
+                    <div class="code-snippet">
+                        <code>silent: false <span class="comment">// ALWAYS</span></code>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon icon-filter">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+                        </svg>
+                    </div>
+                    <h3>Output Filtering</h3>
+                    <p>Prevents accidental leakage of system prompts, config values, and environment variables.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon icon-inspect">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                            <path d="M11 8v6M8 11h6"/>
+                        </svg>
+                    </div>
+                    <h3>Skill Inspection</h3>
+                    <p>LLM analyzes skills before installation, detecting malicious prompts, shell commands, and exfil attempts.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon icon-policy">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <path d="M9 15l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <h3>Policy Enforcement</h3>
+                    <p>Dangerous config options are blocked at load time. No <code>dangerouslyDisable*</code> allowed.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon icon-audit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </div>
+                    <h3>Audit Logging</h3>
+                    <p>Every security event logged: injection attempts, blocked messages, vault access, pairing requests.</p>
+                </div>
+
+                <div class="feature-card feature-highlighted">
+                    <div class="feature-icon icon-claude">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                    </div>
+                    <h3>Claude Code SDK (Default)</h3>
+                    <p>Use your existing Claude Code subscription. <strong>No API key required.</strong> If you prefer API keys, they're stored encrypted.</p>
+                    <ul class="feature-list">
+                        <li>Auto-detects Claude Code CLI</li>
+                        <li>Reads from ~/.claude/credentials.json</li>
+                        <li>Automatic token refresh</li>
+                        <li>Falls back to API key (encrypted in vault)</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comparison Section -->
+        <section class="comparison-section" id="comparison">
+            <div class="section-header">
+                <h2 class="section-title">DilloBot vs OpenClaw</h2>
+                <p class="section-subtitle">Same powerful assistant, hardened security defaults</p>
+            </div>
+            <div class="comparison-table-wrapper">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Security Feature</th>
+                            <th class="openclaw-col">
+                                <span class="product-name">OpenClaw</span>
+                            </th>
+                            <th class="dillobot-col">
+                                <span class="product-name">DilloBot</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Default LLM provider</td>
+                            <td class="openclaw-col">
+                                <span class="status status-warn">API keys required</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">Claude Code SDK (no API key required)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Local connection auth</td>
+                            <td class="openclaw-col">
+                                <span class="status status-warn">Auto-approved</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">Challenge-response required</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Credential storage</td>
+                            <td class="openclaw-col">
+                                <span class="status status-bad">Plaintext files</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">Encrypted vault (OS keychain)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Prompt injection protection</td>
+                            <td class="openclaw-col">
+                                <span class="status status-warn">Basic patterns</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">LLM semantic analysis + 15 critical patterns</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Content source trust</td>
+                            <td class="openclaw-col">
+                                <span class="status status-bad">All sources treated equally</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">Trust levels by source (user: high, skill: medium, email/webhook/API/web: low)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Output filtering</td>
+                            <td class="openclaw-col">
+                                <span class="status status-bad">None</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">Prevents system prompt/config leaks</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Skill verification</td>
+                            <td class="openclaw-col">
+                                <span class="status status-bad">None</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">LLM inspection + quick pattern scan</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Security policy</td>
+                            <td class="openclaw-col">
+                                <span class="status status-warn">Configurable (can disable)</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">Enforced defaults (can't disable)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Security audit logging</td>
+                            <td class="openclaw-col">
+                                <span class="status status-bad">None</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">All security events logged</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Protected channels</td>
+                            <td class="openclaw-col">
+                                <span class="status status-warn">Varies by channel</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">ALL channels (Discord, Slack, Telegram, etc.)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Upstream compatibility</td>
+                            <td class="openclaw-col">
+                                <span class="status status-neutral">N/A</span>
+                            </td>
+                            <td class="dillobot-col">
+                                <span class="status status-good">100% compatible, auto-sync</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Upstream Sync Section -->
+        <section class="sync-section" id="sync">
+            <div class="section-header">
+                <h2 class="section-title">Always Up to Date</h2>
+                <p class="section-subtitle">Automated sync with upstream OpenClaw, security patches preserved</p>
+            </div>
+            <div class="sync-info">
+                <div class="sync-card">
+                    <div class="sync-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M23 4v6h-6M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                    </div>
+                    <h3>Claude Code-Powered Sync</h3>
+                    <p>Our sync agent uses Claude Code to intelligently merge upstream changes while ensuring security patches survive.</p>
+                    <div class="code-snippet">
+                        <code>npm run dillobot:sync</code>
+                    </div>
+                </div>
+                <div class="sync-card">
+                    <div class="sync-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <h3>Daily Automated Checks</h3>
+                    <p>GitHub Actions checks for upstream updates daily. Claude analyzes changes, auto-merges safe updates, flags conflicts for review.</p>
+                </div>
+                <div class="sync-card">
+                    <div class="sync-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                    </div>
+                    <h3>Version Tracking</h3>
+                    <p>README always shows exact upstream version, commit hash, sync date, and how many commits ahead/behind.</p>
+                </div>
+            </div>
+            <div class="security-patches-note">
+                <strong>Protected on every sync:</strong>
+                <span class="patch-list">
+                    <span class="patch-item">silent: false</span>
+                    <span class="patch-item">enforceSecurityPolicy()</span>
+                    <span class="patch-item">Claude Code SDK types</span>
+                    <span class="patch-item">SubscriptionCredential</span>
+                    <span class="patch-item">Central dispatch security</span>
+                    <span class="patch-item">Cron agent protection</span>
+                </span>
+            </div>
+        </section>
+
+        <!-- Architecture Section -->
+        <section class="architecture-section">
+            <div class="section-header">
+                <h2 class="section-title">Security Architecture</h2>
+                <p class="section-subtitle">Layered defense that stays out of your way</p>
+            </div>
+            <div class="architecture-diagram">
+                <div class="arch-layer layer-input">
+                    <div class="layer-label">Input Sources</div>
+                    <div class="layer-content">
+                        <span class="trust-high" title="High trust">User CLI</span>
+                        <span class="trust-medium" title="Medium trust">Skills</span>
+                        <span class="trust-low" title="Low trust">Email</span>
+                        <span class="trust-low" title="Low trust">Webhooks</span>
+                        <span class="trust-low" title="Low trust">API</span>
+                        <span class="trust-low" title="Low trust">Web Content</span>
+                    </div>
+                </div>
+                <div class="arch-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12l7 7 7-7"/>
+                    </svg>
+                </div>
+                <div class="arch-layer layer-security">
+                    <div class="layer-label">Security Pipeline</div>
+                    <div class="security-steps">
+                        <div class="security-step">
+                            <span class="step-num">1</span>
+                            <span class="step-name">Quick Filter</span>
+                            <span class="step-desc">15 critical patterns</span>
+                        </div>
+                        <div class="security-step">
+                            <span class="step-num">2</span>
+                            <span class="step-name">Source Classification</span>
+                            <span class="step-desc">High/Medium/Low trust assignment</span>
+                        </div>
+                        <div class="security-step">
+                            <span class="step-num">3</span>
+                            <span class="step-name">LLM Analysis</span>
+                            <span class="step-desc">Semantic threat detection</span>
+                        </div>
+                        <div class="security-step">
+                            <span class="step-num">4</span>
+                            <span class="step-name">Content Wrapping</span>
+                            <span class="step-desc">Boundary markers</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="arch-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12l7 7 7-7"/>
+                    </svg>
+                </div>
+                <div class="arch-layer layer-agent">
+                    <div class="layer-label">AI Agent</div>
+                    <div class="layer-content">
+                        <span>Safe Processing</span>
+                    </div>
+                </div>
+                <div class="arch-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12l7 7 7-7"/>
+                    </svg>
+                </div>
+                <div class="arch-layer layer-output">
+                    <div class="layer-label">Output Filter</div>
+                    <div class="layer-content">
+                        <span>Leak Prevention</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="footer-logo">
+                        <svg viewBox="0 0 60 60" class="armadillo-logo-small">
+                            <ellipse cx="30" cy="32" rx="22" ry="16" fill="#B8956E"/>
+                            <path d="M12 28 Q30 20 48 28" stroke="#6B5344" stroke-width="2" fill="none"/>
+                            <path d="M10 32 Q30 24 50 32" stroke="#6B5344" stroke-width="2" fill="none"/>
+                            <path d="M10 36 Q30 28 50 36" stroke="#6B5344" stroke-width="2" fill="none"/>
+                            <ellipse cx="48" cy="36" rx="8" ry="6" fill="#B8956E"/>
+                            <circle cx="52" cy="34" r="2" fill="#1a1a1a"/>
+                            <path d="M30 26 L36 29 L36 35 L30 39 L24 35 L24 29 Z" fill="#4ade80"/>
+                        </svg>
+                        <span>DilloBot</span>
+                    </div>
+                    <p class="footer-tagline">Armored AI. No compromises.</p>
+                    <p class="footer-credit">
+                        Built on <a href="https://github.com/openclaw/openclaw" target="_blank">OpenClaw</a> with love and paranoia.
+                    </p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-col">
+                        <h4>Resources</h4>
+                        <a href="https://github.com/AIDilloBot/dillobot" target="_blank">GitHub</a>
+                        <a href="https://github.com/AIDilloBot/dillobot/issues" target="_blank">Issues</a>
+                        <a href="https://github.com/AIDilloBot/dillobot/blob/main/README.md" target="_blank">Documentation</a>
+                    </div>
+                    <div class="footer-col">
+                        <h4>Upstream</h4>
+                        <a href="https://openclaw.ai" target="_blank">OpenClaw</a>
+                        <a href="https://docs.openclaw.ai" target="_blank">OpenClaw Docs</a>
+                        <a href="https://github.com/openclaw/openclaw" target="_blank">OpenClaw GitHub</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>MIT License. Security patches synced automatically with upstream OpenClaw.</p>
+                <!-- DILLOBOT-FOOTER-VERSION --><p class="version-info">Based on OpenClaw commit <a href="https://github.com/openclaw/openclaw/commit/c429ccb64fc319babf4f8adc95df6d658a2d6b2f" target="_blank"><code>c429ccb</code></a> • <a href="https://github.com/AIDilloBot/dillobot/blob/main/README.md#upstream-version" target="_blank">View full sync status</a></p><!-- /DILLOBOT-FOOTER-VERSION -->
+            </div>
+        </footer>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

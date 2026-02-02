@@ -1,11 +1,7 @@
-# DilloBot — Security-Hardened AI Assistant
+# DilloBot
 
 <p align="center">
-  <img src="https://dillo.bot/logo.png" alt="DilloBot" width="300">
-</p>
-
-<p align="center">
-  <strong>Armored AI. No compromises.</strong>
+  <img src="https://dillo.bot/logo.svg" alt="DilloBot - Security-hardened fork of OpenClaw" width="500">
 </p>
 
 <p align="center">
@@ -24,10 +20,10 @@
 <!-- DILLOBOT-UPSTREAM-VERSION-START -->
 | | |
 |---|---|
-| **Based on OpenClaw** | `v2026.1.30-124-g6c6f1e966` |
-| **Upstream Commit** | [`6c6f1e9`](https://github.com/openclaw/openclaw/commit/6c6f1e9660bd81424a25a9a4d1a9c66b9bae5a6c) |
-| **Last Synced** | 2026-02-01 |
-| **Commits Behind** | 43 |
+| **Based on OpenClaw** | `v2026.2.1-11-gc429ccb64` |
+| **Upstream Commit** | [`c429ccb`](https://github.com/openclaw/openclaw/commit/c429ccb64fc319babf4f8adc95df6d658a2d6b2f) |
+| **Last Synced** | 2026-02-02 |
+| **Commits Behind** | 117 |
 <!-- DILLOBOT-UPSTREAM-VERSION-END -->
 
 > This section is automatically updated by the sync agent. See [Upstream Sync](#upstream-sync) for details.

@@ -1,4 +1,6 @@
-const DEFAULT_TAGLINE = "All your chats, one OpenClaw.";
+// DILLOBOT-BRANDING-START
+const DEFAULT_TAGLINE = "Armored AI. No compromises.";
+// DILLOBOT-BRANDING-END
 
 const HOLIDAY_TAGLINES = {
   newYear:
