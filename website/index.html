@@ -401,6 +401,48 @@
                 </div>
             </div>
 
+            <!-- First-Time Dashboard Pairing -->
+            <div class="pairing-notice">
+                <div class="pairing-header">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    <h3>First-Time Dashboard Pairing</h3>
+                </div>
+                <p>When you first open the dashboard, you'll see <strong>"Pairing Required"</strong>. This is expected — DilloBot requires explicit device approval.</p>
+                <div class="pairing-steps">
+                    <div class="code-block">
+                        <span class="code-prompt">#</span>
+                        <code>List pending pairing requests</code>
+                    </div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>dillobot devices local-list</code>
+                        <button class="copy-btn" data-copy="dillobot devices local-list">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="code-block">
+                        <span class="code-prompt">#</span>
+                        <code>Approve your browser</code>
+                    </div>
+                    <div class="code-block">
+                        <span class="code-prompt">$</span>
+                        <code>dillobot devices local-approve &lt;requestId&gt;</code>
+                        <button class="copy-btn" data-copy="dillobot devices local-approve ">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <p class="pairing-note">Then refresh the dashboard. Unlike OpenClaw, DilloBot treats every device as untrusted until explicitly approved — even localhost.</p>
+            </div>
+
             <!-- Platform Support -->
             <div class="platform-support">
                 <div class="platform-icons">

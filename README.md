@@ -272,6 +272,28 @@ dillobot onboard --install-daemon
 npm run dillobot:verify
 ```
 
+### First-Time Dashboard Pairing
+
+When you first access the dashboard, you'll see a **"Pairing Required"** error. This is expected — DilloBot requires all devices (including your browser) to be explicitly paired.
+
+**To pair your browser:**
+
+1. Open the dashboard (runs on `http://localhost:18789` by default)
+2. You'll see "Disconnected from gateway. pairing required"
+3. In your terminal, list pending pairing requests:
+   ```bash
+   dillobot devices local-list
+   ```
+4. Approve your browser's request:
+   ```bash
+   dillobot devices local-approve <requestId>
+   ```
+5. Refresh the dashboard — you're now connected
+
+**Why pairing?** Unlike OpenClaw which auto-approves local connections, DilloBot treats every device as untrusted until explicitly approved. This prevents attacks where malicious code on your machine tries to connect to the gateway.
+
+---
+
 ## Configuration
 
 DilloBot adds a `security` section to your config:
