@@ -17,10 +17,42 @@ import type {
   Model,
   SimpleStreamOptions,
   TextContent,
+  Tool,
   ToolCall,
 } from "@mariozechner/pi-ai";
 import { createAssistantMessageEventStream } from "@mariozechner/pi-ai/dist/utils/event-stream.js";
 import { isClaudeCodeSdkProvider } from "./claude-code-sdk-runner.js";
+
+/**
+ * SDK tools configuration type.
+ * The SDK only accepts preset tools or tool name strings, not custom definitions.
+ */
+type SdkToolsConfig = { type: "preset"; preset: "claude_code" } | string[];
+
+/**
+ * Determine SDK tools configuration based on context.
+ *
+ * DILLOBOT: The SDK doesn't support custom tool definitions. It only accepts:
+ * - { type: 'preset', preset: 'claude_code' } - Use all Claude Code tools
+ * - string[] - Array of tool names
+ *
+ * When tools are present in the context, we use the preset to enable proper
+ * tool_use block output. pi-agent-core will then execute the tools.
+ */
+function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
+  // If context has tools, use the Claude Code preset so Claude outputs proper tool_use blocks
+  // With maxTurns: 1, SDK returns control after tool_use, letting pi-agent-core execute
+  if (tools && tools.length > 0) {
+    console.log(
+      `[DilloBot SDK Stream] Using preset tools for ${tools.length} tools:`,
+      tools.map((t) => t.name).slice(0, 10),
+    );
+    return { type: "preset", preset: "claude_code" };
+  }
+
+  // No tools - use empty array
+  return [];
+}
 
 // Dynamic import for the Claude Agent SDK
 let sdkModule: typeof import("@anthropic-ai/claude-agent-sdk") | null = null;
@@ -95,6 +127,19 @@ function stripToolUseXml(text: string): string {
 
   // Also strip standalone tool: lines that might be orphaned
   result = result.replace(/^tool:[a-z_-]+\s*$/gim, "");
+
+  // Strip inline tool: invocations (not at start of line)
+  // Catches cases like "Let me check: tool:exec" where tool:name appears inline
+  // The \s+ before requires whitespace so we don't match "protocol:tcp" etc.
+  result = result.replace(/\s+tool:[a-z_-]+\s*$/gim, "");
+
+  // Strip tool: followed by newlines (mid-text, not at line end)
+  // Catches "Let me check: tool:exec\nI'll look at..." where tool is followed by newline
+  result = result.replace(/\s+tool:[a-z_-]+\s*\n/gim, "\n");
+
+  // Strip tool: at end of text (no trailing newline)
+  // Catches "...checking:\n\ntool:exec" where tool:exec is the last thing
+  result = result.replace(/\btool:[a-z_-]+\s*$/gi, "");
 
   // Strip "checking/reading/looking" status lines that precede tool calls
   // These are verbose status messages the SDK outputs
@@ -182,11 +227,15 @@ function getLatestUserMessage(messages: Message[]): string {
 
 /**
  * Process SDK messages and push events to the stream.
+ *
+ * DILLOBOT: Now accepts tools configuration to pass to the Claude API so it
+ * outputs proper tool_use blocks that pi-agent-core can execute.
  */
 async function processSdkQuery(
   sdk: typeof import("@anthropic-ai/claude-agent-sdk"),
   prompt: string,
   systemPrompt: string | undefined,
+  toolsConfig: SdkToolsConfig,
   model: Model<any>,
   options: SimpleStreamOptions | undefined,
   stream: ReturnType<typeof createAssistantMessageEventStream>,
@@ -227,17 +276,33 @@ async function processSdkQuery(
 
   try {
     // Configure the SDK for single-turn completion
-    // - No tools (OpenClaw handles tools via pi-agent-core)
-    // - maxTurns: 1 (single completion, pi-agent-core handles the loop)
+    // - Pass tools config so Claude outputs proper tool_use blocks (pi-agent-core executes them)
+    // - maxTurns: 1 (single completion, pi-agent-core handles the agentic loop)
     // - persistSession: false (OpenClaw manages sessions)
+    //
+    // DILLOBOT: We pass tools config to the SDK so Claude can output proper tool_use blocks.
+    // Without tools, Claude outputs text-format tool syntax like "tool:exec" which
+    // pi-agent-core cannot parse. With preset tools, Claude outputs structured tool_use
+    // blocks that pi-agent-core intercepts and executes.
+    //
+    // With maxTurns: 1, the SDK returns control after Claude outputs tool_use blocks,
+    // allowing pi-agent-core to execute the tools using OpenClaw's tool implementations.
+    const toolsLabel = Array.isArray(toolsConfig)
+      ? `${toolsConfig.length} tool names`
+      : "preset:claude_code";
+    console.log(`[DilloBot SDK Stream] Configuring query with tools: ${toolsLabel}`);
+
     const queryIterator = sdk.query({
       prompt,
       options: {
         abortController,
         model: model.id,
-        // Disable all SDK tools - OpenClaw handles tools separately
-        tools: [],
+        // DILLOBOT: Pass tools config to enable proper tool_use block output
+        // When tools are needed, use preset so Claude outputs tool_use blocks
+        // pi-agent-core will intercept and execute these tool calls
+        tools: toolsConfig,
         // Single turn only - pi-agent-core manages the agentic loop
+        // This ensures SDK returns control after tool_use output
         maxTurns: 1,
         // Don't persist to SDK session files - OpenClaw manages sessions
         persistSession: false,
@@ -246,6 +311,7 @@ async function processSdkQuery(
         // Include partial messages for streaming
         includePartialMessages: true,
         // Bypass permissions since we're non-interactive
+        // OpenClaw handles permissions at a higher level
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
       },
@@ -498,14 +564,27 @@ export function createClaudeCodeSdkStreamFn() {
       prompt = latestMessage;
     }
 
+    // DILLOBOT: Get SDK tools configuration for proper tool_use output
+    // This enables Claude to output structured tool_use blocks that pi-agent-core can execute
+    const toolsConfig = getSdkToolsConfig(context.tools);
+
     console.log("[DilloBot SDK Stream] Prompt:", prompt.substring(0, 200) + "...");
     console.log("[DilloBot SDK Stream] System prompt length:", context.systemPrompt?.length ?? 0);
+    console.log("[DilloBot SDK Stream] Tools from context:", context.tools?.length ?? 0);
 
     // Start processing asynchronously
     loadSdk()
       .then((sdk) => {
         console.log("[DilloBot SDK Stream] SDK loaded, starting query");
-        return processSdkQuery(sdk, prompt, context.systemPrompt, model, options, stream);
+        return processSdkQuery(
+          sdk,
+          prompt,
+          context.systemPrompt,
+          toolsConfig,
+          model,
+          options,
+          stream,
+        );
       })
       .catch((error) => {
         console.error("[DilloBot SDK Stream] Error:", error);

@@ -332,7 +332,7 @@ After any upstream sync, verify:
 34. [ ] `resolveStreamFnForProvider()` call in attempt.ts streamFn assignment
 35. [ ] `claude-code-agent` bypass in `src/agents/model-auth.ts` resolveApiKeyForProvider()
 36. [ ] `z.literal("subscription")` in `src/config/zod-schema.ts` auth mode union
-37. [ ] SDK configured with `tools: []`, `maxTurns: 1`, `persistSession: false` in claude-code-sdk-stream.ts
+37. [ ] SDK configured with `getSdkToolsConfig()`, `maxTurns: 1`, `persistSession: false` in claude-code-sdk-stream.ts
 
 ---
 
@@ -521,9 +521,11 @@ const pairingHint = (() => {
 **`src/agents/claude-code-sdk-stream.ts`:** (DilloBot-only file)
 - `createClaudeCodeSdkStreamFn()` - Creates a streamFn that uses Claude SDK
 - `resolveStreamFnForProvider()` - Returns SDK streamFn for claude-code-agent, default otherwise
+- `getSdkToolsConfig()` - Returns preset tools when context has tools (enables tool execution)
 - `stripToolUseXml()` - Removes `<tool_use>` XML blocks from output (SDK shows these for CLI use)
 - Adapts SDK streaming events to pi-ai's `AssistantMessageEventStream` format
-- Configures SDK with `tools: []`, `maxTurns: 1`, `persistSession: false` for single-turn completion
+- Configures SDK with `getSdkToolsConfig()`, `maxTurns: 1`, `persistSession: false`
+- Uses preset tools to enable proper tool_use blocks; maxTurns: 1 returns control for pi-agent-core
 - Strips Claude Code's tool-use display XML for clean chatbot output
 
 **`src/agents/pi-embedded-runner/run/attempt.ts`:** (MINIMAL CHANGE - sync-safe)
@@ -581,7 +583,8 @@ User's `~/.openclaw/openclaw.json` should have:
 - 34. [ ] `src/agents/claude-code-sdk-stream.ts` exists
 - 35. [ ] `claude-code-agent` bypass in `src/agents/model-auth.ts` resolveApiKeyForProvider()
 - 36. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-stream.ts`
-- 37. [ ] SDK configured with `tools: []`, `maxTurns: 1`, `persistSession: false`
+- 37. [ ] SDK configured with `getSdkToolsConfig()`, `maxTurns: 1`, `persistSession: false`
+- 46. [ ] `getSdkToolsConfig()` function returns preset tools when context.tools populated
 - 38. [ ] `stripToolUseXml()` function in claude-code-sdk-stream.ts
 - 39. [ ] SDK stream buffers text (no text_delta during streaming, emits clean at end)
 - 40. [ ] `escapeForPrompt()` has optional `stripUnicode` parameter (default: false)
@@ -717,3 +720,65 @@ User's `~/.openclaw/openclaw.json` should have:
 - `unknown` → Unrecognized sources
 
 **Why:** Without this fix, users saw `<<<EXTERNAL_UNTRUSTED_CONTENT>>>` tags in all their chat messages because session keys like `agent:main:telegram:...` defaulted to "unknown" trust level.
+
+---
+
+### 19. SDK Tool Execution via Preset Tools
+
+**Purpose:** Enable actual tool execution when using Claude Code SDK provider. Without proper tool configuration, Claude outputs text-based tool syntax (like `tool:exec`) instead of proper `tool_use` blocks that pi-agent-core can execute.
+
+**File:** `src/agents/claude-code-sdk-stream.ts`
+
+**Key Changes:**
+
+1. **`getSdkToolsConfig()` function:**
+```typescript
+function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
+  // If context has tools, use the Claude Code preset so Claude outputs proper tool_use blocks
+  // With maxTurns: 1, SDK returns control after tool_use, letting pi-agent-core execute
+  if (tools && tools.length > 0) {
+    return { type: "preset", preset: "claude_code" };
+  }
+  return [];
+}
+```
+
+2. **SDK query configuration:**
+```typescript
+const queryIterator = sdk.query({
+  prompt,
+  options: {
+    // Use preset tools when context has tools - enables proper tool_use block output
+    tools: toolsConfig,  // Was: tools: []
+    maxTurns: 1,  // Returns control after tool_use for pi-agent-core execution
+    // ...
+  },
+});
+```
+
+**How it works:**
+1. When `context.tools` is populated (from pi-agent-core), use preset tools
+2. Claude sees tools available and outputs proper `tool_use` blocks (not text syntax)
+3. With `maxTurns: 1`, SDK returns control after Claude outputs tool_use blocks
+4. pi-agent-core receives tool_use blocks and executes them using OpenClaw's tools
+5. Tool results feed back for next turn
+
+**Before this fix:**
+- SDK was configured with `tools: []`
+- Claude had no tools available to the API
+- Claude output text like `tool:exec\ncommand` (its internal syntax when no tools)
+- pi-agent-core couldn't parse text-based syntax
+- No tools actually executed
+
+**After this fix:**
+- SDK uses preset tools when context has tools
+- Claude outputs proper `tool_use` content blocks
+- pi-agent-core intercepts and executes tools
+- Actual tool execution happens
+
+**Why:** Users were seeing tool intentions in chat (e.g., "Let me check: tool:exec") but tools never actually executed, making the bot non-functional for any task requiring tools.
+
+**Verification:**
+- Check `getSdkToolsConfig()` function exists
+- Check SDK query uses `toolsConfig` not hardcoded `tools: []`
+- Check preset is returned when `tools.length > 0`

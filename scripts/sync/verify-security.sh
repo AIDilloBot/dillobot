@@ -242,6 +242,24 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: SDK stream has getSdkToolsConfig for proper tool execution
+# This function enables tool_use blocks by using preset tools when context has tools
+if grep -q "getSdkToolsConfig" src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ getSdkToolsConfig function present (enables tool execution)"
+else
+    echo "❌ CRITICAL: getSdkToolsConfig missing - tools will not execute!"
+    echo "   Without this, SDK uses tools: [] and Claude outputs text-based tool syntax"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check: SDK stream uses preset tools when context has tools
+if grep -q 'preset.*claude_code' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Preset tools used for tool execution (preset: claude_code)"
+else
+    echo "⚠️  WARNING: Preset tools configuration may be missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check: SDK runner has provider detection function
 if grep -q "export function isClaudeCodeSdkProvider" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
     echo "✅ isClaudeCodeSdkProvider exported from claude-code-sdk-runner.ts"
