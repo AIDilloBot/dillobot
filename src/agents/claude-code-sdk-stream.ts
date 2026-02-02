@@ -54,18 +54,21 @@ function stripToolUseXml(text: string): string {
   // Strip <tool_use>...</tool_use> XML blocks (including nested content)
   result = result.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, "");
 
-  // Strip tool:exec with XML-style command blocks
-  // Format:
-  //   tool:exec
-  //   <command>...</command>
-  //   </tool:exec>
+  // Strip tool:exec with XML-style command blocks (with content)
   result = result.replace(
     /tool:exec\s*\n\s*<command>[\s\S]*?<\/command>\s*\n?\s*<\/tool:exec>/gi,
     "",
   );
 
-  // Strip any tool:name ... </tool:name> hybrid blocks
+  // Strip empty tool:exec blocks (no content between tags)
+  // Format: tool:exec\n\n</tool:exec> or tool:exec\n</tool:exec>
+  result = result.replace(/tool:[a-z_-]+\s*[\n\r]+\s*<\/tool:[a-z_-]+>/gi, "");
+
+  // Strip any tool:name ... </tool:name> hybrid blocks with content
   result = result.replace(/tool:[a-z_-]+\s*\n[\s\S]*?<\/tool:[a-z_-]+>/gi, "");
+
+  // Strip </tool:*> closing tags that might be orphaned
+  result = result.replace(/<\/tool:[a-z_-]+>/gi, "");
 
   // Strip standalone tool XML tags
   result = result.replace(/<\/?tool_(?:use|name|result)>/g, "");
