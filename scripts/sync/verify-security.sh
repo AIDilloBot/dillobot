@@ -282,6 +282,30 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: SDK stream has real-time streaming support
+if grep -q "textStartEmitted" src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Real-time text streaming support (textStartEmitted tracking)"
+else
+    echo "⚠️  WARNING: Real-time streaming may not be implemented"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check: SDK stream has light stripping for streaming
+if grep -q "stripToolSyntaxLight" src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Light stripping function for real-time streaming"
+else
+    echo "⚠️  WARNING: stripToolSyntaxLight function missing - streaming may show tool syntax"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check: SDK stream emits typing indicator during tool execution
+if grep -q "_Working\.\.\._" src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Typing indicator during tool execution (_Working..._)"
+else
+    echo "⚠️  WARNING: No typing indicator during tool execution"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check 7: Provider detection
 echo ""
 echo "Checking provider detection..."

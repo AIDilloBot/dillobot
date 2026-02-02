@@ -61,6 +61,20 @@ async function loadSdk() {
 }
 
 /**
+ * Light stripping for real-time streaming.
+ * Only removes patterns we're confident are tool syntax, not aggressive.
+ * Used during streaming to provide responsive feedback while avoiding obvious tool leaks.
+ */
+function stripToolSyntaxLight(text: string): string {
+  let result = text;
+  // Remove obvious tool: patterns at end of text (might be incomplete)
+  result = result.replace(/\s*tool:[a-z_-]*$/gi, "");
+  // Remove trailing colons that might precede tool syntax
+  result = result.replace(/:\s*$/g, " ");
+  return result;
+}
+
+/**
  * Strip Claude Code's tool invocation output from text.
  *
  * The SDK outputs tool calls in multiple formats:
@@ -269,6 +283,9 @@ async function processSdkQuery(
 
   let currentTextIndex = -1;
   let currentText = "";
+  let lastEmittedLength = 0; // Track what we've already streamed to the user
+  let textStartEmitted = false; // Track if we've emitted text_start for current block
+  let isInToolExecution = false; // Track if we're waiting for tool results
 
   try {
     // Configure the SDK for full agentic loop
@@ -314,27 +331,52 @@ async function processSdkQuery(
         return;
       }
 
+      // Handle user message (tool result) - indicates tool execution in progress
+      if (message.type === "user") {
+        isInToolExecution = true;
+        continue;
+      }
+
       if (message.type === "assistant") {
         // Full assistant message - extract content
+        // This comes after streaming events, use it to sync state
         const betaMessage = message.message;
         if (betaMessage?.content) {
           for (const block of betaMessage.content) {
             if ("text" in block && typeof block.text === "string") {
-              // DILLOBOT: Buffer text internally, don't emit deltas during streaming
-              // This prevents <tool_use> XML from appearing to users during streaming
-              // We'll emit the clean text at the end after stripping XML
+              // Update our buffer with the full text
               if (currentTextIndex < 0) {
                 currentTextIndex = partialMessage.content.length;
                 partialMessage.content.push({ type: "text", text: "" });
-                // Don't emit text_start yet - wait for text_end with clean content
+              }
+              if (!textStartEmitted) {
+                stream.push({
+                  type: "text_start",
+                  contentIndex: currentTextIndex,
+                  partial: partialMessage,
+                });
+                textStartEmitted = true;
               }
 
-              // Accumulate text but don't emit deltas
+              // Sync text buffer with full message
               const newText = block.text;
               if (newText.length > currentText.length) {
+                // Emit any text we haven't streamed yet
+                const cleanedNew = stripToolSyntaxLight(newText);
+                if (cleanedNew.length > lastEmittedLength) {
+                  const newContent = cleanedNew.slice(lastEmittedLength);
+                  if (newContent.trim()) {
+                    stream.push({
+                      type: "text_delta",
+                      contentIndex: currentTextIndex,
+                      delta: newContent,
+                      partial: partialMessage,
+                    });
+                    lastEmittedLength = cleanedNew.length;
+                  }
+                }
                 currentText = newText;
                 (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
-                // NOTE: Intentionally not emitting text_delta here
               }
             } else if ("type" in block && block.type === "tool_use") {
               // SDK returned a tool call - map it to ToolCall format
@@ -393,30 +435,81 @@ async function processSdkQuery(
           };
         };
 
-        // DILLOBOT: Buffer streaming content, don't emit deltas
+        // DILLOBOT: Stream text in real-time for responsive UX
         // Handle content_block_start
         if (streamEvent.event?.type === "content_block_start") {
           if (streamEvent.event.content_block?.type === "text") {
+            // New text block starting
             if (currentTextIndex < 0) {
               currentTextIndex = partialMessage.content.length;
               partialMessage.content.push({ type: "text", text: "" });
-              // Don't emit text_start - will emit with clean content at end
+            }
+            // Emit text_start immediately for responsive streaming
+            if (!textStartEmitted) {
+              stream.push({
+                type: "text_start",
+                contentIndex: currentTextIndex,
+                partial: partialMessage,
+              });
+              textStartEmitted = true;
+            }
+            isInToolExecution = false; // We're back to receiving text
+          } else if (streamEvent.event.content_block?.type === "tool_use") {
+            // Tool execution starting - emit typing indicator event
+            isInToolExecution = true;
+            // Emit a custom event that downstream can use for typing indicators
+            // Using text_delta with a status message
+            if (currentTextIndex >= 0 && textStartEmitted) {
+              const statusMsg = "\n\n_Working..._\n\n";
+              stream.push({
+                type: "text_delta",
+                contentIndex: currentTextIndex,
+                delta: statusMsg,
+                partial: partialMessage,
+              });
+              currentText += statusMsg;
+              lastEmittedLength = currentText.length;
+              (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
             }
           }
         }
 
-        // Handle content_block_delta - buffer only, don't emit
+        // Handle content_block_delta - stream text in real-time
         if (streamEvent.event?.type === "content_block_delta") {
           if (streamEvent.event.delta?.type === "text_delta" && streamEvent.event.delta.text) {
             if (currentTextIndex < 0) {
               currentTextIndex = partialMessage.content.length;
               partialMessage.content.push({ type: "text", text: "" });
             }
-            // Buffer the text but don't emit delta
+            if (!textStartEmitted) {
+              stream.push({
+                type: "text_start",
+                contentIndex: currentTextIndex,
+                partial: partialMessage,
+              });
+              textStartEmitted = true;
+            }
+
+            // Add delta to buffer
             const delta = streamEvent.event.delta.text;
             currentText += delta;
             (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
-            // NOTE: Intentionally not emitting text_delta - will emit clean at end
+
+            // Emit cleaned delta for real-time streaming
+            // Use light stripping to avoid obvious tool syntax
+            const cleanedCurrent = stripToolSyntaxLight(currentText);
+            if (cleanedCurrent.length > lastEmittedLength) {
+              const newContent = cleanedCurrent.slice(lastEmittedLength);
+              if (newContent.trim()) {
+                stream.push({
+                  type: "text_delta",
+                  contentIndex: currentTextIndex,
+                  delta: newContent,
+                  partial: partialMessage,
+                });
+                lastEmittedLength = cleanedCurrent.length;
+              }
+            }
           }
         }
       } else if (message.type === "result") {
@@ -463,43 +556,43 @@ async function processSdkQuery(
       }
     }
 
-    // DILLOBOT: Emit all text events at the end with clean content
-    // We buffered text during streaming to avoid showing <tool_use> XML to users
+    // DILLOBOT: Final cleanup - emit any remaining text after full stripping
     if (currentTextIndex >= 0) {
-      // Strip Claude Code's tool_use XML blocks from output
+      // Apply full stripping to remove any tool syntax that slipped through
       const cleanText = stripToolUseXml(currentText);
       console.log(
-        "[DilloBot SDK Stream] Stripping tool syntax. Before:",
+        "[DilloBot SDK Stream] Final cleanup. Before:",
         currentText.length,
         "After:",
         cleanText.length,
+        "Already streamed:",
+        lastEmittedLength,
       );
 
-      // Update the partial message with clean text
-      (partialMessage.content[currentTextIndex] as TextContent).text = cleanText;
+      // Remove the "_Working..._" status messages we added during tool execution
+      const finalText = cleanText
+        .replace(/\n\n_Working\.\.\._\n\n/g, "\n\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
 
-      // Emit text_start now (we skipped it during streaming)
-      stream.push({
-        type: "text_start",
-        contentIndex: currentTextIndex,
-        partial: partialMessage,
-      });
+      // Update the partial message with final clean text
+      (partialMessage.content[currentTextIndex] as TextContent).text = finalText;
 
-      // Emit the clean text as a single delta
-      if (cleanText) {
+      // Emit text_start if we haven't already (rare case - no streaming happened)
+      if (!textStartEmitted) {
         stream.push({
-          type: "text_delta",
+          type: "text_start",
           contentIndex: currentTextIndex,
-          delta: cleanText,
           partial: partialMessage,
         });
       }
 
-      // Emit text_end
+      // Emit text_end with the final content
+      // Note: We've already streamed most content, but text_end signals completion
       stream.push({
         type: "text_end",
         contentIndex: currentTextIndex,
-        content: cleanText,
+        content: finalText,
         partial: partialMessage,
       });
     }

@@ -792,3 +792,70 @@ const queryIterator = sdk.query({
 - Check `getSdkToolsConfig()` returns preset when tools present
 - Check `maxTurns` is 100 (not 1)
 - Check SDK query uses `toolsConfig` variable
+
+---
+
+### 20. Real-Time Streaming for SDK Responses
+
+**Purpose:** Provide responsive UX by streaming text as it arrives instead of buffering until the end. Show typing indicators during tool execution.
+
+**File:** `src/agents/claude-code-sdk-stream.ts`
+
+**Key Changes:**
+
+1. **Real-time text streaming:**
+```typescript
+// Emit text_start immediately when text block starts
+if (streamEvent.event?.type === "content_block_start") {
+  if (streamEvent.event.content_block?.type === "text") {
+    stream.push({ type: "text_start", ... });
+    textStartEmitted = true;
+  }
+}
+
+// Stream text_delta as it arrives (with light stripping)
+if (streamEvent.event?.type === "content_block_delta") {
+  // Emit cleaned delta for real-time streaming
+  const cleanedCurrent = stripToolSyntaxLight(currentText);
+  if (cleanedCurrent.length > lastEmittedLength) {
+    stream.push({ type: "text_delta", delta: newContent, ... });
+  }
+}
+```
+
+2. **Typing indicators during tool execution:**
+```typescript
+if (streamEvent.event.content_block?.type === "tool_use") {
+  // Emit status message when tool execution starts
+  stream.push({ type: "text_delta", delta: "\n\n_Working..._\n\n", ... });
+}
+```
+
+3. **Light stripping function for streaming:**
+```typescript
+function stripToolSyntaxLight(text: string): string {
+  // Only removes obvious tool patterns, less aggressive than full strip
+  result = result.replace(/\s*tool:[a-z_-]*$/gi, "");
+  result = result.replace(/:\s*$/g, " ");
+  return result;
+}
+```
+
+**Before this fix:**
+- All text buffered until the end
+- User saw nothing while Claude worked (30+ seconds of silence)
+- No indication that tool execution was in progress
+
+**After this fix:**
+- Text streams to user in real-time ("Let me check...")
+- "_Working..._" status shown during tool execution
+- Partial responses emitted between tool calls
+- Final cleanup removes any tool syntax that slipped through
+
+**Why:** Users were waiting 30+ seconds with no feedback, not knowing if the bot was working or broken. Now they see immediate responses and status updates.
+
+**Verification:**
+- Check `textStartEmitted` variable tracks text streaming state
+- Check `lastEmittedLength` tracks what's been sent to user
+- Check `stripToolSyntaxLight()` function exists for real-time stripping
+- Check "_Working..._" status emitted when tool_use block starts
