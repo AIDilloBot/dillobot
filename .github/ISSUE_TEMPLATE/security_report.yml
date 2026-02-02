@@ -8,12 +8,14 @@ body:
       value: |
         ## Important Security Notice
 
-        **For critical security vulnerabilities**, please use [GitHub's private vulnerability reporting](https://github.com/AIDilloBot/dillobot/security/advisories/new) instead of this public form.
+        **For critical security vulnerabilities**, please use [GitHub's private vulnerability reporting](https://github.com/AIDilloBot/dillobot/security/advisories/new) or email [security@dillo.bot](mailto:security@dillo.bot) instead of this public form.
 
         This form is for:
         - Security hardening suggestions
         - Non-critical security improvements
         - Questions about security features
+
+        **Note:** DilloBot is an open-source community project. There is no paid bug bounty program. We appreciate your contributions to keeping DilloBot secure!
 
   - type: checkboxes
     id: not-vuln

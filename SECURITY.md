@@ -74,6 +74,14 @@ Or use the doctor command:
 dillobot doctor
 ```
 
+## Bug Bounty
+
+DilloBot is an open-source community project. **There is no paid bug bounty program.** We appreciate responsible disclosure but cannot offer financial compensation for reports.
+
+We will:
+- Credit you publicly (if desired) when fixes are released
+- Add you to our security hall of fame in the README
+
 ## Responsible Disclosure
 
 We follow responsible disclosure practices:
