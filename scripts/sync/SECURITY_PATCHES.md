@@ -595,16 +595,32 @@ User's `~/.openclaw/openclaw.json` should have:
 
 ### 15. SDK Stream Buffering for Clean Output
 
-**Purpose:** The Claude Code SDK outputs `<tool_use>` XML blocks as part of its "show your work" behavior. For chatbot use, we buffer all text and emit clean output at the end.
+**Purpose:** The Claude Code SDK outputs tool invocations in multiple formats as part of its "show your work" behavior. For chatbot use, we buffer all text and strip these before emitting clean output.
 
 **File:** `src/agents/claude-code-sdk-stream.ts` (DilloBot-only file)
 
 **Key Functions:**
-- `stripToolUseXml()` - Removes `<tool_use>...</tool_use>` XML blocks from text
+- `stripToolUseXml()` - Removes all tool invocation formats from text:
+  1. XML format: `<tool_use>...</tool_use>` blocks
+  2. Text format: `tool:read\nfilename` style invocations
+  3. Status lines: `checking...`, `reading...`, etc.
+  4. Leftover file paths from tool arguments
 - Text is buffered during streaming (no text_delta events emitted)
-- At end, XML is stripped and clean text is emitted as single text_start/delta/end
+- At end, tool output is stripped and clean text is emitted as single text_start/delta/end
 
-**Why:** Users should see clean responses, not internal tool-use XML that Claude Code CLI normally shows.
+**Patterns stripped:**
+```typescript
+// XML blocks
+/<tool_use>[\s\S]*?<\/tool_use>/g
+
+// Text-format tool invocations (tool:read\nfilename)
+/^tool:[a-z_]+\n(?:[^\n]+\n?)*/gim
+
+// Status lines (checking..., reading..., etc.)
+/^(?:checking|reading|looking|searching|writing|creating|updating|deleting|running|executing)[^\n]*\.{3}\n?/gim
+```
+
+**Why:** Users should see clean responses, not internal tool mechanics that Claude Code CLI normally shows.
 
 ---
 
@@ -645,3 +661,35 @@ User's `~/.openclaw/openclaw.json` should have:
 **Behavior:** When `unifyChannels: true`, ALL messages (Slack channels, Telegram DMs, etc.) route to `agent:main:main` session, giving unified memory across platforms.
 
 **Why:** Users expect Korah to be the same bot with same memory whether on Slack, Telegram, or other channels.
+
+---
+
+### 18. Source Classifier for Trusted Messaging Channels
+
+**Purpose:** The security content wrapper (`<<<EXTERNAL_UNTRUSTED_CONTENT>>>`) should only wrap untrusted sources (email, webhooks), NOT direct user input from messaging channels.
+
+**File:** `src/security-hardening/injection/source-classifier.ts`
+
+**Change:** Added `agent:` pattern to SESSION_KEY_PATTERNS to classify messaging channel sessions as trusted:
+
+```typescript
+// DILLOBOT: Agent session keys are trusted user_direct input
+// These come from authenticated messaging channels (Slack, Telegram, Discord, webchat, etc.)
+// Format: agent:{agentId}:{channel}:{type}:{peerId} or agent:{agentId}:main
+{ pattern: /^agent:/i, source: "user_direct" },
+```
+
+**Session keys now classified as `user_direct` (high trust, no wrapping):**
+- `agent:main:telegram:default:dm:xxx` → Telegram
+- `agent:main:slack:channel:xxx` → Slack
+- `agent:main:discord:dm:xxx` → Discord
+- `agent:main:webchat:dm:xxx` → Dashboard/webchat
+- `agent:main:main` → Unified session
+
+**Still classified as low trust (wrapped):**
+- `hook:gmail:...` → Email (injection risk)
+- `hook:webhook:...` → External webhooks (injection risk)
+- `api:...` → External API calls
+- `unknown` → Unrecognized sources
+
+**Why:** Without this fix, users saw `<<<EXTERNAL_UNTRUSTED_CONTENT>>>` tags in all their chat messages because session keys like `agent:main:telegram:...` defaulted to "unknown" trust level.

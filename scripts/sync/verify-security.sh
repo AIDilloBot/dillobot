@@ -218,6 +218,14 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: SDK stream strips text-format tool invocations (tool:read, etc.)
+if grep -q 'tool:\[a-z_\]' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Text-format tool stripping (tool:read) in claude-code-sdk-stream.ts"
+else
+    echo "⚠️  WARNING: Text-format tool stripping missing - tool:read may appear in chat"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check: SDK runner has provider detection function
 if grep -q "export function isClaudeCodeSdkProvider" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
     echo "✅ isClaudeCodeSdkProvider exported from claude-code-sdk-runner.ts"
@@ -272,6 +280,17 @@ if grep -q "shouldBlockImmediately" src/cron/isolated-agent/run.ts 2>/dev/null; 
 else
     echo "⚠️  WARNING: Security checks missing from cron/isolated-agent/run.ts"
     WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check 10b: Source classifier trusts messaging channels
+echo ""
+echo "Checking source classifier for trusted channels..."
+if grep -q 'pattern.*agent:.*user_direct' src/security-hardening/injection/source-classifier.ts 2>/dev/null; then
+    echo "✅ Agent session keys classified as user_direct (trusted)"
+else
+    echo "❌ CRITICAL: agent: pattern missing from source-classifier.ts"
+    echo "   Dashboard/Telegram/Slack messages will show security wrapper tags!"
+    ERRORS=$((ERRORS + 1))
 fi
 
 # Check 11: DilloBot branding (not OpenClaw)
