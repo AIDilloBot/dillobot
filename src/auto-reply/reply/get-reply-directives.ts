@@ -361,14 +361,17 @@ export async function resolveReplyDirectives(params: {
       (agentCfg?.elevatedDefault as ElevatedLevel | undefined) ??
       "on")
     : "off";
+  // DILLOBOT: Default to "on" for responsive streaming UX
+  // Block streaming sends partial responses to messaging channels as they arrive
+  // instead of waiting for the entire response to complete
   const resolvedBlockStreaming =
     opts?.disableBlockStreaming === true
       ? "off"
       : opts?.disableBlockStreaming === false
         ? "on"
-        : agentCfg?.blockStreamingDefault === "on"
-          ? "on"
-          : "off";
+        : agentCfg?.blockStreamingDefault === "off"
+          ? "off"
+          : "on"; // Default to "on" for responsive UX
   const resolvedBlockStreamingBreak: "text_end" | "message_end" =
     agentCfg?.blockStreamingBreak === "message_end" ? "message_end" : "text_end";
   const blockStreamingEnabled =

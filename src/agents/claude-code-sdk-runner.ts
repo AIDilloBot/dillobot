@@ -12,14 +12,7 @@ let sdkModule: typeof import("@anthropic-ai/claude-agent-sdk") | null = null;
 
 async function loadSdk() {
   if (!sdkModule) {
-    try {
-      sdkModule = await import("@anthropic-ai/claude-agent-sdk");
-    } catch (error) {
-      console.error("[DilloBot] Failed to load Claude Agent SDK:", error);
-      throw new Error(
-        "Claude Agent SDK not available. Please install @anthropic-ai/claude-agent-sdk",
-      );
-    }
+    sdkModule = await import("@anthropic-ai/claude-agent-sdk");
   }
   return sdkModule;
 }
@@ -87,11 +80,6 @@ export async function runClaudeCodeSdkAgent(
 ): Promise<ClaudeCodeSdkRunResult> {
   try {
     const sdk = await loadSdk();
-
-    console.info("[DilloBot] Running with Claude Agent SDK");
-    console.info(`[DilloBot] Session: ${params.sessionId}`);
-    console.info(`[DilloBot] Model: ${params.model ?? "claude-sonnet-4-5"}`);
-    console.info(`[DilloBot] Workspace: ${params.workspaceDir}`);
 
     // Create abort controller
     const abortController = new AbortController();

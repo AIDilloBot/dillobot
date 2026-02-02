@@ -921,3 +921,65 @@ if (evtType === "text_end" && ctx.state.blockReplyBreak === "text_end") {
 - Check `handleMessageUpdate` calls `flushBlockReplyBuffer()` on text_end
 - Check `handleMessageUpdate` calls `onBlockReplyFlush()` on text_end
 - Check both calls are inside the `text_end` condition block
+
+---
+
+### 22. SDK Tool Call Filtering (Prevent Infinite Loop)
+
+**Purpose:** Prevent pi-agent-core from re-executing tools that the Claude Code SDK has already executed internally.
+
+**File:** `src/agents/claude-code-sdk-stream.ts`
+
+**Problem:**
+The Claude Code SDK handles tools internally with `maxTurns: 100`. By the time we receive the final result, all tools have been executed. However, if the returned message contains `toolCall` content blocks and `stopReason: "toolUse"`, pi-agent-core interprets this as "tools need execution" and attempts to execute them again, causing an infinite loop.
+
+**Root Cause:**
+```typescript
+// ORIGINAL (BROKEN) CODE:
+const hasToolCalls = partialMessage.content.some((c) => c.type === "toolCall");
+partialMessage.stopReason = hasToolCalls ? "toolUse" : "stop";
+```
+
+This signaled `stopReason: "toolUse"` when tool calls existed, which told pi-agent-core to execute tools that were already executed by the SDK.
+
+**Symptoms:**
+- Bot repeats the same answer multiple times
+- Gateway shows continuous tool execution in logs
+- Same response sent to messaging channel repeatedly
+- Loop continues until timeout or manual intervention
+
+**Solution:**
+Always set `stopReason: "stop"` and filter out tool call content blocks:
+
+```typescript
+// FIXED CODE:
+// IMPORTANT: Claude Code SDK handles tools internally with maxTurns.
+// By the time we receive the final result, all tools have been executed.
+// We must NOT signal "toolUse" or pi-agent-core will try to execute them again.
+// Filter out tool call content blocks to prevent downstream code from re-executing.
+partialMessage.content = partialMessage.content.filter((c) => c.type !== "toolCall");
+partialMessage.stopReason = "stop";
+```
+
+**Why this works:**
+1. SDK executes tools internally during `sdk.query()`
+2. When we receive the final message, tools are already done
+3. By filtering out `toolCall` blocks and using `stopReason: "stop"`:
+   - pi-agent-core sees no tools to execute
+   - Processing completes normally
+   - No infinite loop
+
+**Before this fix:**
+- Bot entered infinite loop
+- Same response repeated indefinitely
+- Tools re-executed over and over
+
+**After this fix:**
+- Single response delivered
+- No duplicate tool execution
+- Clean completion flow
+
+**Verification:**
+- Check `stopReason` is always set to `"stop"` (never `"toolUse"`)
+- Check `partialMessage.content` filters out `type: "toolCall"` blocks
+- Check no condition sets `stopReason` based on tool call presence

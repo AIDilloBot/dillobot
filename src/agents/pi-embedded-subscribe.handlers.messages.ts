@@ -184,10 +184,9 @@ export function handleMessageUpdate(
       ctx.emitBlockChunk(ctx.state.blockBuffer);
       ctx.state.blockBuffer = "";
     }
-    // DILLOBOT: Also flush the coalescer to ensure messages are sent immediately
-    // This is critical for Claude Code SDK where tools execute internally -
-    // without this, the coalescer waits for idleMs timeout before sending,
-    // causing the user to see nothing until the entire tool execution completes.
+    // Flush coalescer to ensure messages are sent immediately.
+    // Critical for Claude Code SDK where tools execute internally -
+    // without this, the coalescer waits for idleMs timeout before sending.
     ctx.flushBlockReplyBuffer();
     if (ctx.params.onBlockReplyFlush) {
       void ctx.params.onBlockReplyFlush();

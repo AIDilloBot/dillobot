@@ -322,6 +322,31 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: SDK tool call filtering (prevent infinite loop)
+# The SDK handles tools internally - we must NOT signal "toolUse" stopReason
+if grep -q 'stopReason = "stop"' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ SDK always returns stopReason: stop (not toolUse)"
+else
+    echo "❌ CRITICAL: SDK may return stopReason: toolUse causing infinite loop!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q 'filter.*toolCall' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ SDK filters out toolCall content blocks"
+else
+    echo "⚠️  WARNING: SDK may not filter toolCall blocks - could cause duplicate execution"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Verify NO condition sets stopReason based on hasToolCalls
+if grep -q 'hasToolCalls.*toolUse' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "❌ CRITICAL: SDK sets stopReason based on hasToolCalls - will cause infinite loop!"
+    echo "   Fix: Always use stopReason = 'stop' for SDK responses"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ SDK does not set stopReason based on hasToolCalls"
+fi
+
 # Check 7: Provider detection
 echo ""
 echo "Checking provider detection..."
