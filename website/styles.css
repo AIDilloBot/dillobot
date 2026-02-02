@@ -514,7 +514,7 @@ body {
 
 .badge-1 { top: -10px; left: -20px; animation-delay: 0s; }
 .badge-2 { top: 30%; right: -20px; animation-delay: -1.5s; }
-.badge-3 { bottom: 5%; left: -20px; animation-delay: -3s; }
+.badge-3 { bottom: 10px; left: -30px; animation-delay: -3s; }
 
 @keyframes badgeFloat {
     0%, 100% { transform: translateY(0) rotate(-2deg); }
