@@ -218,11 +218,19 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
-# Check: SDK stream strips text-format tool invocations (tool:read, etc.)
-if grep -q 'tool:\[a-z_\]' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
-    echo "✅ Text-format tool stripping (tool:read) in claude-code-sdk-stream.ts"
+# Check: SDK stream strips text-format tool invocations (tool:read, tool:exec, etc.)
+if grep -q 'tool:\[a-z_-\]' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Text-format tool stripping (tool:read, tool:exec) in claude-code-sdk-stream.ts"
 else
-    echo "⚠️  WARNING: Text-format tool stripping missing - tool:read may appear in chat"
+    echo "⚠️  WARNING: Text-format tool stripping missing - tool:read/exec may appear in chat"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check: SDK stream handles multi-line tool output with negative lookahead
+if grep -q '(?!tool:)' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ Multi-line tool output stripping (negative lookahead) present"
+else
+    echo "⚠️  WARNING: Multi-line tool output stripping may be incomplete"
     WARNINGS=$((WARNINGS + 1))
 fi
 

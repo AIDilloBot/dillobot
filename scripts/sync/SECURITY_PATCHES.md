@@ -613,11 +613,18 @@ User's `~/.openclaw/openclaw.json` should have:
 // XML blocks
 /<tool_use>[\s\S]*?<\/tool_use>/g
 
-// Text-format tool invocations (tool:read\nfilename)
-/^tool:[a-z_]+\n(?:[^\n]+\n?)*/gim
+// Text-format tool invocations with multi-line output (tool:read, tool:exec, tool:bash, etc.)
+// Uses negative lookahead to capture all output until next tool: or end
+/^tool:[a-z_-]+\s*\n(?:(?!tool:)[^\n]*\n?)*/gim
 
-// Status lines (checking..., reading..., etc.)
-/^(?:checking|reading|looking|searching|writing|creating|updating|deleting|running|executing)[^\n]*\.{3}\n?/gim
+// Standalone orphaned tool: lines
+/^tool:[a-z_-]+\s*$/gim
+
+// Status lines (checking..., reading..., executing..., etc.)
+/^(?:checking|reading|looking|searching|writing|creating|updating|deleting|running|executing|fetching|loading|saving|calling)[^\n]*\.{3,}\s*\n?/gim
+
+// Leftover file paths from tool arguments
+/^(?:\.\/|\/)?[\w\-./]+\.(?:md|txt|ts|js|json|yaml|yml|sh|py|rb|go|rs)\s*$/gim
 ```
 
 **Why:** Users should see clean responses, not internal tool mechanics that Claude Code CLI normally shows.
