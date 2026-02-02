@@ -71,6 +71,15 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 3c: Zod schema includes subscription mode
+if grep -q 'z.literal("subscription")' src/config/zod-schema.ts 2>/dev/null; then
+    echo "✅ subscription mode in Zod schema"
+else
+    echo "❌ CRITICAL: subscription mode missing from Zod schema (zod-schema.ts)"
+    echo "   Config validation will reject Claude Code SDK auth profiles!"
+    ERRORS=$((ERRORS + 1))
+fi
+
 if grep -q '"subscription"' src/config/types.auth.ts 2>/dev/null; then
     echo "✅ subscription mode present in AuthProfileConfig"
 else

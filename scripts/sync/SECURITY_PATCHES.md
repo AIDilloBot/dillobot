@@ -72,7 +72,20 @@ return applyConfigOverrides(securedCfg);
 
 ---
 
-### 4. Security Config Type Integration
+### 4. Zod Schema Auth Mode
+
+**File:** `src/config/zod-schema.ts`
+
+**Mode union must include `subscription`:**
+```typescript
+mode: z.union([z.literal("api_key"), z.literal("oauth"), z.literal("token"), z.literal("subscription")]),
+```
+
+**Why:** The Zod schema validates config at runtime. Without `subscription` in the mode union, Claude Code SDK auth profiles fail validation during onboarding.
+
+---
+
+### 5. Security Config Type Integration
 
 **File:** `src/config/types.openclaw.ts`
 
@@ -318,6 +331,7 @@ After any upstream sync, verify:
 33. [ ] `runClaudeCodeSdkAgent` call in `src/agents/pi-embedded-runner/run.ts`
 34. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-runner.ts`
 35. [ ] `permissionMode: "bypassPermissions"` in SDK options
+36. [ ] `z.literal("subscription")` in `src/config/zod-schema.ts` auth mode union
 
 ---
 

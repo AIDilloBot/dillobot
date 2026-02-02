@@ -35,6 +35,7 @@ const SECURITY_CRITICAL_FILES = [
   "src/config/types.models.ts",
   "src/config/types.openclaw.ts",
   "src/config/types.auth.ts",             // SubscriptionCredential mode
+  "src/config/zod-schema.ts",             // Must include subscription in auth mode union
   "src/agents/models-config.providers.ts",
   "src/agents/auth-profiles/types.ts",    // SubscriptionCredential type definition
   "src/auto-reply/dispatch.ts",           // Central security integration for ALL channels
@@ -363,6 +364,16 @@ async function verifySecurityPatches(): Promise<{ valid: boolean; issues: string
     }
   } catch {
     issues.push("ERROR: Could not read types.models.ts");
+  }
+
+  // Check 3b: Zod schema includes subscription mode
+  try {
+    const zodSchema = await fs.readFile("src/config/zod-schema.ts", "utf-8");
+    if (!zodSchema.includes('z.literal("subscription")')) {
+      issues.push("CRITICAL: subscription mode missing from Zod schema - config validation will fail");
+    }
+  } catch {
+    issues.push("ERROR: Could not read zod-schema.ts");
   }
 
   // Check 4: Security module exists
