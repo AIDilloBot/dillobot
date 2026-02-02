@@ -26,6 +26,8 @@ export const SessionSchema = z
         z.literal("per-account-channel-peer"),
       ])
       .optional(),
+    // DILLOBOT: Unify all sessions (DMs, channels, groups) to main session
+    unifyChannels: z.boolean().optional(),
     identityLinks: z.record(z.string(), z.array(z.string())).optional(),
     resetTriggers: z.array(z.string()).optional(),
     idleMinutes: z.number().int().positive().optional(),

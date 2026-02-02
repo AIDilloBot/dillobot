@@ -133,7 +133,17 @@ export function buildAgentPeerSessionKey(params: {
   identityLinks?: Record<string, string[]>;
   /** DM session scope. */
   dmScope?: "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
+  /** DILLOBOT: Unify all sessions (including channels/groups) to main session. */
+  unifyChannels?: boolean;
 }): string {
+  // DILLOBOT: If unifyChannels is true, all sessions use the main session
+  if (params.unifyChannels) {
+    return buildAgentMainSessionKey({
+      agentId: params.agentId,
+      mainKey: params.mainKey,
+    });
+  }
+
   const peerKind = params.peerKind ?? "dm";
   if (peerKind === "dm") {
     const dmScope = params.dmScope ?? "main";
