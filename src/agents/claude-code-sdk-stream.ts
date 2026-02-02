@@ -39,19 +39,45 @@ async function loadSdk() {
 }
 
 /**
- * Strip Claude Code's tool_use XML blocks from text output.
+ * Strip Claude Code's tool invocation output from text.
  *
- * The SDK outputs <tool_use>...</tool_use> blocks as part of its text
- * when showing what it's doing. For chatbot use, we want clean output
- * without these internal mechanics visible.
+ * The SDK outputs tool calls in multiple formats:
+ * 1. XML: <tool_use>...</tool_use> blocks
+ * 2. Text: "tool:toolname\narguments" format
+ * 3. Verbose: "checking...", "reading...", etc. status lines
+ *
+ * For chatbot use, we want clean output without these internal mechanics.
  */
 function stripToolUseXml(text: string): string {
-  // Strip <tool_use>...</tool_use> blocks (including nested content)
-  // This regex handles multi-line tool_use blocks
-  let result = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, "");
+  let result = text;
 
-  // Also strip standalone tool tags that might appear
+  // Strip <tool_use>...</tool_use> XML blocks (including nested content)
+  result = result.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, "");
+
+  // Strip standalone tool XML tags
   result = result.replace(/<\/?tool_(?:use|name|result)>/g, "");
+
+  // DILLOBOT: Strip text-format tool invocations
+  // Format: "tool:toolname" followed by arguments on next lines
+  // Examples:
+  //   tool:read
+  //   IDENTITY.md
+  //
+  //   tool:write
+  //   filename.txt
+  //   content here
+  result = result.replace(/^tool:[a-z_]+\n(?:[^\n]+\n?)*/gim, "");
+
+  // Strip "checking/reading/looking" status lines that precede tool calls
+  // These are verbose status messages the SDK outputs
+  result = result.replace(
+    /^(?:checking|reading|looking|searching|writing|creating|updating|deleting|running|executing)[^\n]*\.{3}\n?/gim,
+    "",
+  );
+
+  // Strip lines that are just filenames/paths (leftovers from tool args)
+  // Only if they look like file paths and are on their own line
+  result = result.replace(/^(?:\.\/|\/)?[\w\-./]+\.(?:md|txt|ts|js|json|yaml|yml)\s*$/gim, "");
 
   // Clean up excessive whitespace left behind
   result = result.replace(/\n{3,}/g, "\n\n").trim();
