@@ -58,26 +58,38 @@ function stripToolUseXml(text: string): string {
   result = result.replace(/<\/?tool_(?:use|name|result)>/g, "");
 
   // DILLOBOT: Strip text-format tool invocations
-  // Format: "tool:toolname" followed by arguments on next lines
+  // Format: "tool:toolname" followed by arguments/output on subsequent lines
   // Examples:
   //   tool:read
   //   IDENTITY.md
   //
-  //   tool:write
-  //   filename.txt
-  //   content here
-  result = result.replace(/^tool:[a-z_]+\n(?:[^\n]+\n?)*/gim, "");
+  //   tool:exec
+  //   ls -la
+  //   [output lines]
+  //
+  //   tool:bash
+  //   echo hello
+
+  // Match tool:name followed by any content until next tool: or end of significant content
+  // This handles multi-line tool output
+  result = result.replace(/^tool:[a-z_-]+\s*\n(?:(?!tool:)[^\n]*\n?)*/gim, "");
+
+  // Also strip standalone tool: lines that might be orphaned
+  result = result.replace(/^tool:[a-z_-]+\s*$/gim, "");
 
   // Strip "checking/reading/looking" status lines that precede tool calls
   // These are verbose status messages the SDK outputs
   result = result.replace(
-    /^(?:checking|reading|looking|searching|writing|creating|updating|deleting|running|executing)[^\n]*\.{3}\n?/gim,
+    /^(?:checking|reading|looking|searching|writing|creating|updating|deleting|running|executing|fetching|loading|saving|calling)[^\n]*\.{3,}\s*\n?/gim,
     "",
   );
 
   // Strip lines that are just filenames/paths (leftovers from tool args)
   // Only if they look like file paths and are on their own line
-  result = result.replace(/^(?:\.\/|\/)?[\w\-./]+\.(?:md|txt|ts|js|json|yaml|yml)\s*$/gim, "");
+  result = result.replace(
+    /^(?:\.\/|\/)?[\w\-./]+\.(?:md|txt|ts|js|json|yaml|yml|sh|py|rb|go|rs)\s*$/gim,
+    "",
+  );
 
   // Clean up excessive whitespace left behind
   result = result.replace(/\n{3,}/g, "\n\n").trim();
