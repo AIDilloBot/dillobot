@@ -192,34 +192,37 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
-# Check: SDK integration in pi-embedded-runner
-if grep -q "isClaudeCodeSdkProvider" src/agents/pi-embedded-runner/run.ts 2>/dev/null; then
-    echo "✅ isClaudeCodeSdkProvider import in run.ts"
+# Check: SDK integration at streamFn level (new architecture)
+# The SDK is now integrated via resolveStreamFnForProvider in attempt.ts
+if grep -q "resolveStreamFnForProvider" src/agents/pi-embedded-runner/run/attempt.ts 2>/dev/null; then
+    echo "✅ resolveStreamFnForProvider import in attempt.ts (streamFn-level SDK integration)"
 else
-    echo "❌ CRITICAL: isClaudeCodeSdkProvider missing from pi-embedded-runner/run.ts"
-    echo "   The Claude Agent SDK integration hook is missing!"
+    echo "❌ CRITICAL: resolveStreamFnForProvider missing from attempt.ts"
+    echo "   The Claude Agent SDK streamFn integration is missing!"
     ERRORS=$((ERRORS + 1))
 fi
 
-if grep -q "runClaudeCodeSdkAgent" src/agents/pi-embedded-runner/run.ts 2>/dev/null; then
-    echo "✅ runClaudeCodeSdkAgent call in run.ts"
+# Check: SDK stream module exists and has provider detection
+if grep -q "isClaudeCodeSdkProvider" src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ isClaudeCodeSdkProvider used in claude-code-sdk-stream.ts"
 else
-    echo "❌ CRITICAL: runClaudeCodeSdkAgent call missing from pi-embedded-runner/run.ts"
+    echo "❌ CRITICAL: isClaudeCodeSdkProvider missing from claude-code-sdk-stream.ts"
     ERRORS=$((ERRORS + 1))
 fi
 
-# Check: SDK query usage in runner
-if grep -q "sdk.query" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
-    echo "✅ sdk.query() usage in claude-code-sdk-runner.ts"
+# Check: SDK stream has clean output stripping (no tool_use XML in chat)
+if grep -q "stripToolUseXml" src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ stripToolUseXml function in claude-code-sdk-stream.ts (clean output)"
 else
-    echo "⚠️  WARNING: sdk.query() call missing from claude-code-sdk-runner.ts"
+    echo "⚠️  WARNING: stripToolUseXml missing - tool_use XML may appear in chat"
     WARNINGS=$((WARNINGS + 1))
 fi
 
-if grep -q "bypassPermissions" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
-    echo "✅ permissionMode: bypassPermissions in SDK options"
+# Check: SDK runner has provider detection function
+if grep -q "export function isClaudeCodeSdkProvider" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
+    echo "✅ isClaudeCodeSdkProvider exported from claude-code-sdk-runner.ts"
 else
-    echo "⚠️  WARNING: bypassPermissions mode missing from SDK options"
+    echo "⚠️  WARNING: isClaudeCodeSdkProvider export missing from claude-code-sdk-runner.ts"
     WARNINGS=$((WARNINGS + 1))
 fi
 
