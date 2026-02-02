@@ -244,6 +244,15 @@ export async function listDevicePairing(baseDir?: string): Promise<DevicePairing
   return { pending, paired };
 }
 
+/**
+ * Check if any devices have been paired (used for first-run detection).
+ * Returns true if this is the first run (no paired devices yet).
+ */
+export async function isFirstRun(baseDir?: string): Promise<boolean> {
+  const state = await loadState(baseDir);
+  return Object.keys(state.pairedByDeviceId).length === 0;
+}
+
 export async function getPairedDevice(
   deviceId: string,
   baseDir?: string,

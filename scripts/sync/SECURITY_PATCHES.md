@@ -4,22 +4,35 @@ This document describes the security modifications made to OpenClaw that MUST be
 
 ## Critical Patches
 
-### 1. Local Connection Auto-Approve for Bootstrapping
+### 1. First-Run Only Local Auto-Approve
 
 **File:** `src/gateway/server/ws-connection/message-handler.ts`
 **Line:** ~640
 
 ```typescript
-// Keep as upstream (allows local bootstrapping):
-silent: isLocalClient, // Auto-approve local connections for bootstrapping
+// DilloBot: Only auto-approve local on first run (no paired devices yet)
+silent: isLocalClient && (await isFirstRun()), // Auto-approve local on first run only
 ```
 
-**Security rationale:** Local loopback connections (127.0.0.1) are auto-approved because:
-- Users with local machine access already have full system access
-- Prevents chicken-and-egg bootstrapping problem (need pairing to approve pairing)
-- Remote connections still require explicit device pairing
+**File:** `src/infra/device-pairing.ts`
+**Added function:**
+```typescript
+export async function isFirstRun(baseDir?: string): Promise<boolean> {
+  const state = await loadState(baseDir);
+  return Object.keys(state.pairedByDeviceId).length === 0;
+}
+```
 
-**Note:** Remote connections are NOT auto-approved - they require explicit pairing through the Control UI.
+**Security rationale:**
+- First connection from local loopback is auto-approved (bootstrapping)
+- Once ANY device is paired, all subsequent connections require explicit pairing
+- Prevents VPS port-forwarding attack (attacker would need to be the very first connection)
+- Dashboard refresh works because the device is already in `paired.json`
+
+**Flow:**
+1. First run, no devices paired → local auto-approve → device saved to `paired.json`
+2. Dashboard refresh → device found in `paired.json` → allowed (no pairing needed)
+3. New device after first run → requires explicit pairing (no auto-approve)
 
 ---
 

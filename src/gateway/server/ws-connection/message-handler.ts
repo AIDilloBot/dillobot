@@ -15,6 +15,7 @@ import {
   approveDevicePairing,
   ensureDeviceToken,
   getPairedDevice,
+  isFirstRun,
   requestDevicePairing,
   updatePairedDeviceMetadata,
   verifyDeviceToken,
@@ -637,7 +638,7 @@ export function attachGatewayWsMessageHandler(params: {
               role,
               scopes,
               remoteIp: reportedClientIp,
-              silent: isLocalClient, // Auto-approve local connections for bootstrapping
+              silent: isLocalClient && (await isFirstRun()), // Auto-approve local on first run only
             });
             const context = buildRequestContext();
             if (pairing.request.silent === true) {
