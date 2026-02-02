@@ -21,7 +21,7 @@ import { getHardenedDefaults } from "./security-policy.js";
  */
 const DEFAULT_CONNECTION_POLICY: ConnectionPolicyConfig = {
   requireChallengeForLocal: true,
-  allowLocalAutoApprove: false,
+  allowLocalAutoApprove: true, // Allow local loopback to self-approve
   maxPairingRequestsPerHour: 10,
 };
 

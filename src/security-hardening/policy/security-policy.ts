@@ -13,7 +13,7 @@ import type { SecurityPolicyConfig } from "../types.js";
 const HARDENED_DEFAULTS: Partial<SecurityPolicyConfig> = {
   connections: {
     requireChallengeForLocal: true,
-    allowLocalAutoApprove: false, // CRITICAL: Never auto-approve
+    allowLocalAutoApprove: true, // Allow local connections to self-approve for bootstrapping
     maxPairingRequestsPerHour: 10,
   },
   credentials: {

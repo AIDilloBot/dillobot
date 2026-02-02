@@ -4,21 +4,22 @@ This document describes the security modifications made to OpenClaw that MUST be
 
 ## Critical Patches
 
-### 1. Disable Auto-Approve for Local Connections
+### 1. Local Connection Auto-Approve for Bootstrapping
 
 **File:** `src/gateway/server/ws-connection/message-handler.ts`
 **Line:** ~640
-**Change:** `silent: isLocalClient` → `silent: false`
 
 ```typescript
-// MUST BE:
-silent: false, // DILLOBOT: Never auto-approve, even local connections
-
-// MUST NOT BE:
-silent: isLocalClient,
+// Keep as upstream (allows local bootstrapping):
+silent: isLocalClient, // Auto-approve local connections for bootstrapping
 ```
 
-**Why:** Prevents automatic authentication bypass for local connections. All connections must go through challenge-response pairing.
+**Security rationale:** Local loopback connections (127.0.0.1) are auto-approved because:
+- Users with local machine access already have full system access
+- Prevents chicken-and-egg bootstrapping problem (need pairing to approve pairing)
+- Remote connections still require explicit device pairing
+
+**Note:** Remote connections are NOT auto-approved - they require explicit pairing through the Control UI.
 
 ---
 
@@ -269,7 +270,7 @@ This entire directory is DilloBot-specific and must be preserved. It contains:
 
 After any upstream sync, verify:
 
-1. [ ] `silent: false` in message-handler.ts (not `silent: isLocalClient`)
+1. [ ] `silent: isLocalClient` in message-handler.ts (allows local bootstrapping)
 2. [ ] `enforceSecurityPolicy()` called in io.ts
 3. [ ] `claude-code-agent` in ModelApi union
 4. [ ] `subscription` in ModelProviderAuthMode union
