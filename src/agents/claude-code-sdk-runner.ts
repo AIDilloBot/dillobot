@@ -109,6 +109,16 @@ export async function runClaudeCodeSdkAgent(
     }, params.timeoutMs);
 
     try {
+      // Build system prompt configuration
+      // Use Claude Code preset with DilloBot context appended
+      const systemPromptConfig = params.extraSystemPrompt
+        ? {
+            type: "preset" as const,
+            preset: "claude_code" as const,
+            append: params.extraSystemPrompt,
+          }
+        : undefined;
+
       // Run the query using Claude Agent SDK
       const queryIterator = sdk.query({
         prompt: params.prompt,
@@ -120,6 +130,8 @@ export async function runClaudeCodeSdkAgent(
           tools: { type: "preset", preset: "claude_code" },
           // Allow all tools automatically for bot usage
           permissionMode: "bypassPermissions",
+          // Pass system prompt with DilloBot context
+          ...(systemPromptConfig && { systemPrompt: systemPromptConfig }),
           // Disable interactive mode
           maxTurns: 10,
         },

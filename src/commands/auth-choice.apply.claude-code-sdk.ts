@@ -83,12 +83,31 @@ export async function applyAuthChoiceClaudeCodeSdk(
     },
   });
 
-  // Apply config
+  // Apply auth profile config
   nextConfig = applyAuthProfileConfig(nextConfig, {
     profileId,
     provider,
     mode: "subscription",
   });
+
+  // DILLOBOT: Also set the model config in agents.defaults
+  const modelRef = `${provider}/claude-sonnet-4-5`;
+  const existingModel = nextConfig.agents?.defaults?.model;
+  nextConfig = {
+    ...nextConfig,
+    agents: {
+      ...nextConfig.agents,
+      defaults: {
+        ...nextConfig.agents?.defaults,
+        model: {
+          ...(existingModel && typeof existingModel === "object" && "fallbacks" in existingModel
+            ? { fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks }
+            : undefined),
+          primary: modelRef,
+        },
+      },
+    },
+  };
 
   await params.prompter.note(
     [

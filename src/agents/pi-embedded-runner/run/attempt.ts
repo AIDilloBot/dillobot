@@ -32,6 +32,7 @@ import {
   listChannelSupportedActions,
   resolveChannelMessageToolHints,
 } from "../../channel-tools.js";
+import { resolveStreamFnForProvider } from "../../claude-code-sdk-stream.js";
 import { resolveOpenClawDocsPath } from "../../docs-path.js";
 import { isTimeoutError } from "../../failover-error.js";
 import { resolveModelAuthMode } from "../../model-auth.js";
@@ -506,7 +507,8 @@ export async function runEmbeddedAttempt(
       });
 
       // Force a stable streamFn reference so vitest can reliably mock @mariozechner/pi-ai.
-      activeSession.agent.streamFn = streamSimple;
+      // DILLOBOT: resolveStreamFnForProvider handles Claude SDK provider detection
+      activeSession.agent.streamFn = resolveStreamFnForProvider(params.provider, streamSimple);
 
       applyExtraParamsToAgent(
         activeSession.agent,

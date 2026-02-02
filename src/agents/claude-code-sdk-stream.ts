@@ -1,0 +1,487 @@
+/**
+ * Claude Code SDK Stream Function
+ *
+ * Provides a streamFn implementation that uses the Claude Agent SDK,
+ * making it work at the same level as other LLM providers in pi-ai.
+ *
+ * This integrates the SDK at the streaming level, NOT as a separate
+ * agent flow. OpenClaw handles tools, session management, and context
+ * building - the SDK just does the completion.
+ */
+
+import type {
+  AssistantMessage,
+  AssistantMessageEvent,
+  Context,
+  Message,
+  Model,
+  SimpleStreamOptions,
+  TextContent,
+  ToolCall,
+} from "@mariozechner/pi-ai";
+import { createAssistantMessageEventStream } from "@mariozechner/pi-ai/dist/utils/event-stream.js";
+import { isClaudeCodeSdkProvider } from "./claude-code-sdk-runner.js";
+
+// Dynamic import for the Claude Agent SDK
+let sdkModule: typeof import("@anthropic-ai/claude-agent-sdk") | null = null;
+
+async function loadSdk() {
+  if (!sdkModule) {
+    try {
+      sdkModule = await import("@anthropic-ai/claude-agent-sdk");
+    } catch (error) {
+      throw new Error(
+        "Claude Agent SDK not available. Please install @anthropic-ai/claude-agent-sdk",
+      );
+    }
+  }
+  return sdkModule;
+}
+
+/**
+ * Format pi-ai messages into a prompt string for the SDK.
+ *
+ * Since the SDK expects a single prompt, we need to format the
+ * message history in a way Claude understands as conversation context.
+ */
+function formatMessagesForSdk(messages: Message[]): string {
+  const parts: string[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      const content =
+        typeof msg.content === "string"
+          ? msg.content
+          : msg.content
+              .filter((c): c is TextContent => c.type === "text")
+              .map((c) => c.text)
+              .join("\n");
+      parts.push(`Human: ${content}`);
+    } else if (msg.role === "assistant") {
+      const textContent = msg.content
+        .filter((c): c is TextContent => c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+      if (textContent) {
+        parts.push(`Assistant: ${textContent}`);
+      }
+
+      // Include tool calls as context
+      const toolCalls = msg.content.filter((c): c is ToolCall => c.type === "toolCall");
+      for (const tc of toolCalls) {
+        parts.push(`Assistant used tool: ${tc.name}`);
+      }
+    } else if (msg.role === "toolResult") {
+      const resultText = msg.content
+        .filter((c): c is TextContent => c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+      parts.push(`Tool result (${msg.toolName}): ${resultText}`);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+/**
+ * Get the latest user message from the context.
+ */
+function getLatestUserMessage(messages: Message[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "user") {
+      if (typeof msg.content === "string") {
+        return msg.content;
+      }
+      return msg.content
+        .filter((c): c is TextContent => c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+    }
+  }
+  return "";
+}
+
+/**
+ * Process SDK messages and push events to the stream.
+ */
+async function processSdkQuery(
+  sdk: typeof import("@anthropic-ai/claude-agent-sdk"),
+  prompt: string,
+  systemPrompt: string | undefined,
+  model: Model<any>,
+  options: SimpleStreamOptions | undefined,
+  stream: ReturnType<typeof createAssistantMessageEventStream>,
+): Promise<void> {
+  const abortController = new AbortController();
+
+  // Link to provided abort signal
+  if (options?.signal) {
+    options.signal.addEventListener("abort", () => {
+      abortController.abort();
+    });
+  }
+
+  // Build partial message that we'll update as we stream
+  const partialMessage: AssistantMessage = {
+    role: "assistant",
+    content: [],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  };
+
+  // Emit start event
+  stream.push({ type: "start", partial: partialMessage });
+
+  let currentTextIndex = -1;
+  let currentText = "";
+
+  try {
+    // Configure the SDK for single-turn completion
+    // - No tools (OpenClaw handles tools via pi-agent-core)
+    // - maxTurns: 1 (single completion, pi-agent-core handles the loop)
+    // - persistSession: false (OpenClaw manages sessions)
+    const queryIterator = sdk.query({
+      prompt,
+      options: {
+        abortController,
+        model: model.id,
+        // Disable all SDK tools - OpenClaw handles tools separately
+        tools: [],
+        // Single turn only - pi-agent-core manages the agentic loop
+        maxTurns: 1,
+        // Don't persist to SDK session files - OpenClaw manages sessions
+        persistSession: false,
+        // Pass the system prompt
+        systemPrompt: systemPrompt || undefined,
+        // Include partial messages for streaming
+        includePartialMessages: true,
+        // Bypass permissions since we're non-interactive
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+      },
+    });
+
+    for await (const message of queryIterator) {
+      // Check for abort
+      if (abortController.signal.aborted) {
+        partialMessage.stopReason = "aborted";
+        stream.push({ type: "error", reason: "aborted", error: partialMessage });
+        stream.end(partialMessage);
+        return;
+      }
+
+      if (message.type === "assistant") {
+        // Full assistant message - extract content
+        const betaMessage = message.message;
+        if (betaMessage?.content) {
+          for (const block of betaMessage.content) {
+            if ("text" in block && typeof block.text === "string") {
+              // Start new text block if needed
+              if (currentTextIndex < 0) {
+                currentTextIndex = partialMessage.content.length;
+                partialMessage.content.push({ type: "text", text: "" });
+                stream.push({
+                  type: "text_start",
+                  contentIndex: currentTextIndex,
+                  partial: partialMessage,
+                });
+              }
+
+              // Emit delta for any new text
+              const newText = block.text;
+              if (newText.length > currentText.length) {
+                const delta = newText.slice(currentText.length);
+                currentText = newText;
+                (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
+                stream.push({
+                  type: "text_delta",
+                  contentIndex: currentTextIndex,
+                  delta,
+                  partial: partialMessage,
+                });
+              }
+            } else if ("type" in block && block.type === "tool_use") {
+              // SDK returned a tool call - map it to ToolCall format
+              const toolBlock = block as {
+                id: string;
+                name: string;
+                input: Record<string, unknown>;
+              };
+              const toolCallIndex = partialMessage.content.length;
+              const toolCall: ToolCall = {
+                type: "toolCall",
+                id: toolBlock.id,
+                name: toolBlock.name,
+                arguments: toolBlock.input,
+              };
+              partialMessage.content.push(toolCall);
+              stream.push({
+                type: "toolcall_start",
+                contentIndex: toolCallIndex,
+                partial: partialMessage,
+              });
+              stream.push({
+                type: "toolcall_end",
+                contentIndex: toolCallIndex,
+                toolCall,
+                partial: partialMessage,
+              });
+            }
+          }
+        }
+
+        // Update usage if available
+        if (betaMessage?.usage) {
+          partialMessage.usage = {
+            input: betaMessage.usage.input_tokens ?? 0,
+            output: betaMessage.usage.output_tokens ?? 0,
+            cacheRead:
+              (betaMessage.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ??
+              0,
+            cacheWrite:
+              (betaMessage.usage as { cache_creation_input_tokens?: number })
+                .cache_creation_input_tokens ?? 0,
+            totalTokens:
+              (betaMessage.usage.input_tokens ?? 0) + (betaMessage.usage.output_tokens ?? 0),
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          };
+        }
+      } else if (message.type === "stream_event") {
+        // Streaming delta events from SDK
+        const streamEvent = message as {
+          event?: {
+            type?: string;
+            index?: number;
+            delta?: { type?: string; text?: string };
+            content_block?: { type?: string; text?: string };
+          };
+        };
+
+        // Handle content_block_start
+        if (streamEvent.event?.type === "content_block_start") {
+          if (streamEvent.event.content_block?.type === "text") {
+            if (currentTextIndex < 0) {
+              currentTextIndex = partialMessage.content.length;
+              partialMessage.content.push({ type: "text", text: "" });
+              stream.push({
+                type: "text_start",
+                contentIndex: currentTextIndex,
+                partial: partialMessage,
+              });
+            }
+          }
+        }
+
+        // Handle content_block_delta
+        if (streamEvent.event?.type === "content_block_delta") {
+          if (streamEvent.event.delta?.type === "text_delta" && streamEvent.event.delta.text) {
+            if (currentTextIndex < 0) {
+              currentTextIndex = partialMessage.content.length;
+              partialMessage.content.push({ type: "text", text: "" });
+              stream.push({
+                type: "text_start",
+                contentIndex: currentTextIndex,
+                partial: partialMessage,
+              });
+            }
+            const delta = streamEvent.event.delta.text;
+            currentText += delta;
+            (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
+            stream.push({
+              type: "text_delta",
+              contentIndex: currentTextIndex,
+              delta,
+              partial: partialMessage,
+            });
+          }
+        }
+      } else if (message.type === "result") {
+        // Final result
+        if (message.subtype === "success") {
+          const successMsg = message as {
+            result?: string;
+            usage?: { input_tokens?: number; output_tokens?: number };
+          };
+
+          // Update final text if provided
+          if (successMsg.result && successMsg.result !== currentText) {
+            if (currentTextIndex < 0) {
+              currentTextIndex = partialMessage.content.length;
+              partialMessage.content.push({ type: "text", text: "" });
+              stream.push({
+                type: "text_start",
+                contentIndex: currentTextIndex,
+                partial: partialMessage,
+              });
+            }
+            const delta = successMsg.result.slice(currentText.length);
+            if (delta) {
+              currentText = successMsg.result;
+              (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
+              stream.push({
+                type: "text_delta",
+                contentIndex: currentTextIndex,
+                delta,
+                partial: partialMessage,
+              });
+            }
+          }
+
+          // Update usage
+          if (successMsg.usage) {
+            partialMessage.usage = {
+              input: successMsg.usage.input_tokens ?? 0,
+              output: successMsg.usage.output_tokens ?? 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens:
+                (successMsg.usage.input_tokens ?? 0) + (successMsg.usage.output_tokens ?? 0),
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            };
+          }
+
+          // Check if we have tool calls
+          const hasToolCalls = partialMessage.content.some((c) => c.type === "toolCall");
+          partialMessage.stopReason = hasToolCalls ? "toolUse" : "stop";
+        } else {
+          // Error result
+          const errorMsg = message as { errors?: string[] };
+          partialMessage.stopReason = "error";
+          partialMessage.errorMessage = errorMsg.errors?.join("; ") ?? "Unknown error";
+        }
+      }
+    }
+
+    // Emit text_end if we had text content
+    if (currentTextIndex >= 0) {
+      stream.push({
+        type: "text_end",
+        contentIndex: currentTextIndex,
+        content: currentText,
+        partial: partialMessage,
+      });
+    }
+
+    // Emit done event
+    if (partialMessage.stopReason === "error") {
+      stream.push({ type: "error", reason: "error", error: partialMessage });
+    } else {
+      stream.push({
+        type: "done",
+        reason: partialMessage.stopReason as "stop" | "length" | "toolUse",
+        message: partialMessage,
+      });
+    }
+
+    stream.end(partialMessage);
+  } catch (error) {
+    partialMessage.stopReason = "error";
+    partialMessage.errorMessage = error instanceof Error ? error.message : String(error);
+    stream.push({ type: "error", reason: "error", error: partialMessage });
+    stream.end(partialMessage);
+  }
+}
+
+/**
+ * Create a streamFn that uses Claude Agent SDK.
+ *
+ * This makes the SDK work at the same level as streamSimple from pi-ai,
+ * allowing it to integrate with OpenClaw's existing infrastructure.
+ */
+export function createClaudeCodeSdkStreamFn() {
+  return function claudeCodeSdkStream(
+    model: Model<any>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): ReturnType<typeof createAssistantMessageEventStream> {
+    const stream = createAssistantMessageEventStream();
+
+    // Build the prompt from message history
+    // The SDK expects a single prompt, so we format the history
+    const formattedHistory = formatMessagesForSdk(context.messages.slice(0, -1));
+    const latestMessage = getLatestUserMessage(context.messages);
+
+    // Combine history context with latest message
+    let prompt: string;
+    if (formattedHistory) {
+      prompt = `Previous conversation:\n${formattedHistory}\n\nHuman: ${latestMessage}`;
+    } else {
+      prompt = latestMessage;
+    }
+
+    // Start processing asynchronously
+    loadSdk()
+      .then((sdk) => processSdkQuery(sdk, prompt, context.systemPrompt, model, options, stream))
+      .catch((error) => {
+        const errorMessage: AssistantMessage = {
+          role: "assistant",
+          content: [],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "error",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          timestamp: Date.now(),
+        };
+        stream.push({ type: "error", reason: "error", error: errorMessage });
+        stream.end(errorMessage);
+      });
+
+    return stream;
+  };
+}
+
+/**
+ * Check if we can use Claude Code SDK streaming.
+ */
+export async function isClaudeCodeSdkStreamAvailable(): Promise<boolean> {
+  try {
+    await loadSdk();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Re-export for convenience
+export { isClaudeCodeSdkProvider } from "./claude-code-sdk-runner.js";
+
+/**
+ * Resolve the appropriate streamFn for the given provider.
+ *
+ * DILLOBOT: This function wraps streamFn resolution to support Claude SDK.
+ * For claude-code-agent provider, returns the SDK streamFn.
+ * For all other providers, returns the provided default streamFn unchanged.
+ *
+ * This is designed to minimize changes to upstream files - only a single
+ * function call is needed in attempt.ts.
+ */
+export function resolveStreamFnForProvider(
+  provider: string,
+  defaultStreamFn: ReturnType<typeof createClaudeCodeSdkStreamFn>,
+): ReturnType<typeof createClaudeCodeSdkStreamFn> {
+  if (isClaudeCodeSdkProvider(provider)) {
+    return createClaudeCodeSdkStreamFn();
+  }
+  return defaultStreamFn;
+}
