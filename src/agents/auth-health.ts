@@ -12,7 +12,7 @@ export type AuthProfileHealthStatus = "ok" | "expiring" | "expired" | "missing" 
 export type AuthProfileHealth = {
   profileId: string;
   provider: string;
-  type: "oauth" | "token" | "api_key";
+  type: "oauth" | "token" | "api_key" | "subscription";
   status: AuthProfileHealthStatus;
   expiresAt?: number;
   remainingMs?: number;
@@ -131,6 +131,36 @@ function buildProfileHealth(params: {
     };
   }
 
+  // DILLOBOT: Handle subscription credentials (Claude Code SDK)
+  if (credential.type === "subscription") {
+    const expiresAt =
+      typeof credential.expires === "number" && Number.isFinite(credential.expires)
+        ? credential.expires
+        : undefined;
+    if (!expiresAt || expiresAt <= 0) {
+      return {
+        profileId,
+        provider: credential.provider,
+        type: "subscription",
+        status: "static",
+        source,
+        label,
+      };
+    }
+    const { status, remainingMs } = resolveOAuthStatus(expiresAt, now, warnAfterMs);
+    return {
+      profileId,
+      provider: credential.provider,
+      type: "subscription",
+      status,
+      expiresAt,
+      remainingMs,
+      source,
+      label,
+    };
+  }
+
+  // Remaining type is oauth
   const hasRefreshToken = typeof credential.refresh === "string" && credential.refresh.length > 0;
   const { status: rawStatus, remainingMs } = resolveOAuthStatus(
     credential.expires,

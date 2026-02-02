@@ -216,6 +216,38 @@ if (securityResult.blocked) {
 
 ---
 
+### 9. Subscription Credential Type Support
+
+**Files:**
+- `src/agents/auth-profiles/types.ts` — Added `SubscriptionCredential` type to union
+- `src/config/types.auth.ts` — Added `"subscription"` to `AuthProfileConfig.mode`
+- `src/agents/auth-health.ts` — Added subscription handling in health checks
+- `src/agents/auth-profiles/store.ts` — Added subscription type validation and migration
+- `src/agents/auth-profiles/oauth.ts` — Added subscription handling before OAuth fallback
+- `src/agents/tools/session-status-tool.ts` — Added subscription type display
+- `src/auto-reply/reply/commands-status.ts` — Added subscription type display
+
+**Key Types:**
+```typescript
+// In auth-profiles/types.ts
+export type SubscriptionCredential = {
+  type: "subscription";
+  provider: string;
+  token: string;
+  expires?: number;
+  email?: string;
+};
+
+// Union includes:
+export type AuthProfileCredential = ApiKeyCredential | TokenCredential | OAuthCredential | SubscriptionCredential;
+```
+
+**Pattern for handling:** When checking credential types, always add explicit `if (cred.type === "subscription")` check before falling through to OAuth handling.
+
+**Why:** Required for Claude Code SDK authentication. Subscription credentials are like tokens (static, no OAuth refresh) but distinct for DilloBot tracking.
+
+---
+
 ## Security Module
 
 **Directory:** `src/security-hardening/`
@@ -251,3 +283,5 @@ After any upstream sync, verify:
 12. [ ] `processContentSecurity` called in dispatch.ts (central security integration)
 13. [ ] `shouldBlockImmediately` called in dispatch.ts (quick filter)
 14. [ ] Security imports present in cron/isolated-agent/run.ts
+15. [ ] `SubscriptionCredential` type in auth-profiles/types.ts
+16. [ ] `"subscription"` in AuthProfileConfig.mode (types.auth.ts)

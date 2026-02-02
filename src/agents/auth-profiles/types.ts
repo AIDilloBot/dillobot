@@ -28,7 +28,21 @@ export type OAuthCredential = OAuthCredentials & {
   email?: string;
 };
 
-export type AuthProfileCredential = ApiKeyCredential | TokenCredential | OAuthCredential;
+// DILLOBOT: Subscription credential for Claude Code SDK
+export type SubscriptionCredential = {
+  type: "subscription";
+  provider: string;
+  token: string;
+  /** Optional expiry timestamp (ms since epoch). */
+  expires?: number;
+  email?: string;
+};
+
+export type AuthProfileCredential =
+  | ApiKeyCredential
+  | TokenCredential
+  | OAuthCredential
+  | SubscriptionCredential;
 
 export type AuthProfileFailureReason =
   | "auth"

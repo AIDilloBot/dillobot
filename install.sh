@@ -194,6 +194,27 @@ EOF
     echo -e "${SUCCESS}✓${NC} Installed to ${INFO}~/.local/bin/dillobot${NC}"
 }
 
+install_from_npm() {
+    echo -e "${WARN}→${NC} Installing from npm registry..."
+
+    # Check if already installed globally
+    if npm list -g dillobot &>/dev/null; then
+        echo -e "${INFO}i${NC} Updating existing installation..."
+        npm update -g dillobot
+    else
+        npm install -g dillobot
+    fi
+
+    # Verify installation
+    if check_command dillobot; then
+        echo -e "${SUCCESS}✓${NC} Installed via npm"
+        return 0
+    else
+        echo -e "${ERROR}npm install failed, falling back to git...${NC}"
+        return 1
+    fi
+}
+
 install_from_git() {
     local repo_url="${DILLOBOT_REPO:-https://github.com/AIDilloBot/dillobot.git}"
     local install_dir="${DILLOBOT_DIR:-$HOME/.dillobot-src}"
@@ -246,16 +267,23 @@ print_usage() {
     echo "  --help        Show this help"
     echo "  --uninstall   Remove DilloBot"
     echo "  --verify      Verify security patches only"
-    echo "  --git         Clone from GitHub (even if in local repo)"
+    echo "  --npm         Install from npm registry (default for remote install)"
+    echo "  --git         Clone from GitHub and build from source"
     echo ""
     echo "Environment variables:"
     echo "  DILLOBOT_REPO   Git repository URL (default: github.com/AIDilloBot/dillobot)"
     echo "  DILLOBOT_DIR    Installation directory for git clone"
     echo ""
+    echo "Install methods (in order of preference):"
+    echo "  1. Local source - if running from repo directory"
+    echo "  2. npm         - fast, pre-built binaries"
+    echo "  3. git         - clone and build from source"
+    echo ""
 }
 
 main() {
     local use_git=0
+    local use_npm=0
     local verify_only=0
 
     while [[ $# -gt 0 ]]; do
@@ -276,6 +304,10 @@ main() {
                 use_git=1
                 shift
                 ;;
+            --npm)
+                use_npm=1
+                shift
+                ;;
             *)
                 echo -e "${ERROR}Unknown option: $1${NC}"
                 print_usage
@@ -293,22 +325,40 @@ main() {
 
     echo -e "${WARN}→${NC} Checking prerequisites..."
     ensure_node
-    ensure_pnpm
 
     # Check for Claude Code SDK (DilloBot's preferred auth method)
     setup_claude_code_sdk
 
     echo ""
-    if [[ "$INSTALL_FROM_LOCAL" == "1" && "$use_git" == "0" ]]; then
+    if [[ "$INSTALL_FROM_LOCAL" == "1" && "$use_git" == "0" && "$use_npm" == "0" ]]; then
+        # Installing from local source requires pnpm
+        ensure_pnpm
         echo -e "${INFO}i${NC} Installing from local source: ${INFO}${REPO_DIR}${NC}"
         install_from_local "$REPO_DIR"
-    else
-        echo -e "${INFO}i${NC} Installing from GitHub..."
+    elif [[ "$use_git" == "1" ]]; then
+        # Explicit git install requested
+        ensure_pnpm
+        echo -e "${INFO}i${NC} Installing from GitHub (source)..."
         if ! check_command git; then
-            echo -e "${ERROR}Error: git is required for remote install.${NC}"
+            echo -e "${ERROR}Error: git is required for source install.${NC}"
             exit 1
         fi
         install_from_git
+    else
+        # Default: try npm first (faster), fall back to git
+        echo -e "${INFO}i${NC} Installing from npm registry..."
+        if install_from_npm; then
+            : # npm install succeeded
+        else
+            # Fall back to git if npm fails
+            echo -e "${WARN}→${NC} Falling back to git install..."
+            ensure_pnpm
+            if ! check_command git; then
+                echo -e "${ERROR}Error: git is required for source install.${NC}"
+                exit 1
+            fi
+            install_from_git
+        fi
     fi
 
     run_verify

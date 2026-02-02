@@ -34,7 +34,9 @@ const SECURITY_CRITICAL_FILES = [
   "src/config/io.ts",
   "src/config/types.models.ts",
   "src/config/types.openclaw.ts",
+  "src/config/types.auth.ts",             // SubscriptionCredential mode
   "src/agents/models-config.providers.ts",
+  "src/agents/auth-profiles/types.ts",    // SubscriptionCredential type definition
   "src/auto-reply/dispatch.ts",           // Central security integration for ALL channels
   "src/cron/isolated-agent/run.ts",       // Security for email/webhook hooks
 ];
@@ -430,6 +432,11 @@ async function syncWithUpstream(): Promise<SyncResult> {
     if (mergeResult.success) {
       const verification = await verifySecurityPatches();
       if (verification.valid) {
+        // Update README with version info and amend the merge commit
+        const readmeUpdated = await updateReadmeVersion();
+        if (readmeUpdated) {
+          run('git commit --amend --no-edit');
+        }
         console.log("✅ Simple merge successful! Security patches intact.\n");
         return {
           success: true,
@@ -465,6 +472,11 @@ async function syncWithUpstream(): Promise<SyncResult> {
       // Simple merge worked
       const verification = await verifySecurityPatches();
       if (verification.valid) {
+        // Update README with version info and amend the merge commit
+        const readmeUpdated = await updateReadmeVersion();
+        if (readmeUpdated) {
+          run('git commit --amend --no-edit');
+        }
         console.log("✅ Merge successful! All security patches intact.\n");
         return {
           success: true,
@@ -501,6 +513,8 @@ async function syncWithUpstream(): Promise<SyncResult> {
         // Verify and commit
         const verification = await verifySecurityPatches();
         if (verification.valid) {
+          // Update README with version info before committing
+          await updateReadmeVersion();
           run('git commit -m "Merge upstream OpenClaw (DilloBot auto-sync via Claude Code)"');
           console.log("\n✅ Merge successful with Claude Code conflict resolution!\n");
           return {
@@ -530,6 +544,82 @@ async function syncWithUpstream(): Promise<SyncResult> {
     ],
     upstreamChanges: updates.summary,
   };
+}
+
+/**
+ * Get upstream version info
+ */
+function getUpstreamVersionInfo(): {
+  version: string;
+  commit: string;
+  commitShort: string;
+  date: string;
+  behindCount: number;
+} {
+  // Get the latest upstream tag/version
+  const version = run(`git describe --tags upstream/${UPSTREAM_BRANCH} 2>/dev/null || echo "unknown"`, {
+    ignoreError: true,
+  }) || "unknown";
+
+  // Get the upstream HEAD commit
+  const commit = run(`git rev-parse upstream/${UPSTREAM_BRANCH}`, { ignoreError: true }) || "unknown";
+  const commitShort = commit.slice(0, 7);
+
+  // Get the commit date
+  const dateRaw = run(`git log -1 --format=%ci upstream/${UPSTREAM_BRANCH}`, { ignoreError: true });
+  const date = dateRaw ? dateRaw.split(" ")[0] : new Date().toISOString().split("T")[0];
+
+  // Get how many commits we're behind (should be 0 after sync)
+  const behindCount = parseInt(
+    run(`git rev-list --count HEAD..upstream/${UPSTREAM_BRANCH}`, { ignoreError: true }) || "0",
+    10,
+  );
+
+  return { version, commit, commitShort, date, behindCount };
+}
+
+/**
+ * Update README with upstream version info
+ */
+async function updateReadmeVersion(): Promise<boolean> {
+  const readmePath = "README.md";
+
+  try {
+    let readme = await fs.readFile(readmePath, "utf-8");
+
+    const versionInfo = getUpstreamVersionInfo();
+    const today = new Date().toISOString().split("T")[0];
+
+    // Build the new version block
+    const newVersionBlock = `<!-- DILLOBOT-UPSTREAM-VERSION-START -->
+| | |
+|---|---|
+| **Based on OpenClaw** | \`${versionInfo.version}\` |
+| **Upstream Commit** | [\`${versionInfo.commitShort}\`](https://github.com/openclaw/openclaw/commit/${versionInfo.commit}) |
+| **Last Synced** | ${today} |
+| **Commits Behind** | ${versionInfo.behindCount} |
+<!-- DILLOBOT-UPSTREAM-VERSION-END -->`;
+
+    // Replace the version block
+    const versionRegex = /<!-- DILLOBOT-UPSTREAM-VERSION-START -->[\s\S]*?<!-- DILLOBOT-UPSTREAM-VERSION-END -->/;
+
+    if (versionRegex.test(readme)) {
+      readme = readme.replace(versionRegex, newVersionBlock);
+      await fs.writeFile(readmePath, readme, "utf-8");
+
+      // Stage the README change
+      run(`git add ${readmePath}`);
+
+      console.log(`📝 Updated README.md with upstream version: ${versionInfo.version} (${versionInfo.commitShort})`);
+      return true;
+    } else {
+      console.log("⚠️  Could not find version block in README.md");
+      return false;
+    }
+  } catch (error) {
+    console.log("⚠️  Could not update README.md:", error);
+    return false;
+  }
 }
 
 /**

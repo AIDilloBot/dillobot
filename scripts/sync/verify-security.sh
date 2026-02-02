@@ -45,9 +45,24 @@ else
 fi
 
 if grep -q '"subscription"' src/config/types.models.ts 2>/dev/null; then
-    echo "✅ subscription auth mode present"
+    echo "✅ subscription auth mode present in types.models.ts"
 else
-    echo "⚠️  WARNING: subscription auth mode missing"
+    echo "⚠️  WARNING: subscription auth mode missing from types.models.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check 3b: SubscriptionCredential type support
+if grep -q "SubscriptionCredential" src/agents/auth-profiles/types.ts 2>/dev/null; then
+    echo "✅ SubscriptionCredential type present in auth-profiles/types.ts"
+else
+    echo "⚠️  WARNING: SubscriptionCredential type missing from auth-profiles/types.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q '"subscription"' src/config/types.auth.ts 2>/dev/null; then
+    echo "✅ subscription mode present in AuthProfileConfig"
+else
+    echo "⚠️  WARNING: subscription mode missing from AuthProfileConfig"
     WARNINGS=$((WARNINGS + 1))
 fi
 

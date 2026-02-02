@@ -104,6 +104,10 @@ function resolveModelAuthLabel(params: {
     if (profile.type === "token") {
       return `token ${formatApiKeySnippet(profile.token)}${label ? ` (${label})` : ""}`;
     }
+    // DILLOBOT: Handle subscription credentials (Claude Code SDK)
+    if (profile.type === "subscription") {
+      return `subscription ${formatApiKeySnippet(profile.token)}${label ? ` (${label})` : ""}`;
+    }
     return `api-key ${formatApiKeySnippet(profile.key)}${label ? ` (${label})` : ""}`;
   }
 

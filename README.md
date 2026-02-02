@@ -17,6 +17,21 @@
 
 **DilloBot** is a security-hardened fork of [OpenClaw](https://github.com/openclaw/openclaw), the open-source personal AI assistant. DilloBot adds enterprise-grade security features while maintaining full compatibility with upstream OpenClaw.
 
+---
+
+## Upstream Version
+
+<!-- DILLOBOT-UPSTREAM-VERSION-START -->
+| | |
+|---|---|
+| **Based on OpenClaw** | `v2026.1.30-124-g6c6f1e966` |
+| **Upstream Commit** | [`6c6f1e9`](https://github.com/openclaw/openclaw/commit/6c6f1e9660bd81424a25a9a4d1a9c66b9bae5a6c) |
+| **Last Synced** | 2026-02-01 |
+| **Commits Behind** | 43 |
+<!-- DILLOBOT-UPSTREAM-VERSION-END -->
+
+> This section is automatically updated by the sync agent. See [Upstream Sync](#upstream-sync) for details.
+
 ## Why DilloBot?
 
 OpenClaw is excellent, but defaults to convenience over security. DilloBot flips that:

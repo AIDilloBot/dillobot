@@ -167,6 +167,24 @@ export async function resolveApiKeyForProfile(params: {
     }
     return { apiKey: token, provider: cred.provider, email: cred.email };
   }
+  // DILLOBOT: Handle subscription credentials (Claude Code SDK)
+  // Subscription is like token - static token without OAuth refresh
+  if (cred.type === "subscription") {
+    const token = cred.token?.trim();
+    if (!token) {
+      return null;
+    }
+    if (
+      typeof cred.expires === "number" &&
+      Number.isFinite(cred.expires) &&
+      cred.expires > 0 &&
+      Date.now() >= cred.expires
+    ) {
+      return null;
+    }
+    return { apiKey: token, provider: cred.provider, email: cred.email };
+  }
+  // Remaining type is oauth
   if (Date.now() < cred.expires) {
     return {
       apiKey: buildOAuthApiKey(cred.provider, cred),

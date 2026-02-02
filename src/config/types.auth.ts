@@ -5,8 +5,9 @@ export type AuthProfileConfig = {
    * - api_key: static provider API key
    * - oauth: refreshable OAuth credentials (access+refresh+expires)
    * - token: static bearer-style token (optionally expiring; no refresh)
+   * - subscription: DILLOBOT Claude Code SDK subscription token
    */
-  mode: "api_key" | "oauth" | "token";
+  mode: "api_key" | "oauth" | "token" | "subscription";
   email?: string;
 };
 

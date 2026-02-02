@@ -61,7 +61,13 @@ function coerceLegacyStore(raw: unknown): LegacyAuthStore | null {
       continue;
     }
     const typed = value as Partial<AuthProfileCredential>;
-    if (typed.type !== "api_key" && typed.type !== "oauth" && typed.type !== "token") {
+    // DILLOBOT: Include subscription type for Claude Code SDK
+    if (
+      typed.type !== "api_key" &&
+      typed.type !== "oauth" &&
+      typed.type !== "token" &&
+      typed.type !== "subscription"
+    ) {
       continue;
     }
     entries[key] = {
@@ -87,7 +93,13 @@ function coerceAuthStore(raw: unknown): AuthProfileStore | null {
       continue;
     }
     const typed = value as Partial<AuthProfileCredential>;
-    if (typed.type !== "api_key" && typed.type !== "oauth" && typed.type !== "token") {
+    // DILLOBOT: Include subscription type for Claude Code SDK
+    if (
+      typed.type !== "api_key" &&
+      typed.type !== "oauth" &&
+      typed.type !== "token" &&
+      typed.type !== "subscription"
+    ) {
       continue;
     }
     if (!typed.provider) {
@@ -229,7 +241,8 @@ export function loadAuthProfileStore(): AuthProfileStore {
           ...(typeof cred.expires === "number" ? { expires: cred.expires } : {}),
           ...(cred.email ? { email: cred.email } : {}),
         };
-      } else {
+      } else if (cred.type === "oauth") {
+        // Explicit check for oauth to avoid TypeScript errors with subscription type
         store.profiles[profileId] = {
           type: "oauth",
           provider: String(cred.provider ?? provider),
@@ -239,6 +252,15 @@ export function loadAuthProfileStore(): AuthProfileStore {
           ...(cred.enterpriseUrl ? { enterpriseUrl: cred.enterpriseUrl } : {}),
           ...(cred.projectId ? { projectId: cred.projectId } : {}),
           ...(cred.accountId ? { accountId: cred.accountId } : {}),
+          ...(cred.email ? { email: cred.email } : {}),
+        };
+      } else if (cred.type === "subscription") {
+        // DILLOBOT: Handle subscription credentials (Claude Code SDK)
+        store.profiles[profileId] = {
+          type: "subscription",
+          provider: String(cred.provider ?? provider),
+          token: cred.token,
+          ...(typeof cred.expires === "number" ? { expires: cred.expires } : {}),
           ...(cred.email ? { email: cred.email } : {}),
         };
       }
@@ -305,7 +327,8 @@ function loadAuthProfileStoreForAgent(
           ...(typeof cred.expires === "number" ? { expires: cred.expires } : {}),
           ...(cred.email ? { email: cred.email } : {}),
         };
-      } else {
+      } else if (cred.type === "oauth") {
+        // Explicit check for oauth to avoid TypeScript errors with subscription type
         store.profiles[profileId] = {
           type: "oauth",
           provider: String(cred.provider ?? provider),
@@ -315,6 +338,15 @@ function loadAuthProfileStoreForAgent(
           ...(cred.enterpriseUrl ? { enterpriseUrl: cred.enterpriseUrl } : {}),
           ...(cred.projectId ? { projectId: cred.projectId } : {}),
           ...(cred.accountId ? { accountId: cred.accountId } : {}),
+          ...(cred.email ? { email: cred.email } : {}),
+        };
+      } else if (cred.type === "subscription") {
+        // DILLOBOT: Handle subscription credentials (Claude Code SDK)
+        store.profiles[profileId] = {
+          type: "subscription",
+          provider: String(cred.provider ?? provider),
+          token: cred.token,
+          ...(typeof cred.expires === "number" ? { expires: cred.expires } : {}),
           ...(cred.email ? { email: cred.email } : {}),
         };
       }

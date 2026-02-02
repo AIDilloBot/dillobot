@@ -153,7 +153,8 @@
     "ui:install": "node scripts/ui.js install",
     "dillobot:verify": "bash scripts/sync/verify-security.sh",
     "dillobot:sync": "npx tsx scripts/sync/upstream-sync-agent.ts",
-    "dillobot:sync:check": "git fetch upstream 2>/dev/null || git remote add upstream https://github.com/openclaw/openclaw.git && git fetch upstream && git rev-list --count HEAD..upstream/main"
+    "dillobot:sync:check": "git fetch upstream 2>/dev/null || git remote add upstream https://github.com/openclaw/openclaw.git && git fetch upstream && git rev-list --count HEAD..upstream/main",
+    "dillobot:version": "npx tsx scripts/sync/update-version.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.13.1",
