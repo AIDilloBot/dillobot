@@ -1,150 +1,99 @@
 /**
  * DilloBot Claude Code SDK Authentication
  *
- * Handles authentication with Claude Code SDK using the subscription
- * token from ~/.claude/ directory.
+ * Checks if Claude Code CLI is available and authenticated.
+ * Claude Code handles its own auth via OAuth/system keychain.
  */
 
-import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
+import { execSync, spawn } from "node:child_process";
 
 /**
  * Claude Code SDK authentication result.
  */
 export interface ClaudeCodeAuthResult {
-  subscriptionToken: string;
-  expires?: number;
-  email?: string;
-  source: "file" | "env";
+  available: boolean;
+  version?: string;
+  source: "cli";
 }
 
 /**
- * Possible locations for Claude Code credentials.
+ * Check if Claude Code CLI is installed and working.
  */
-const CLAUDE_CREDENTIAL_PATHS = [
-  path.join(os.homedir(), ".claude", "credentials.json"),
-  path.join(os.homedir(), ".claude", "auth.json"),
-  path.join(os.homedir(), ".config", "claude", "credentials.json"),
-];
+function isClaudeCliInstalled(): boolean {
+  try {
+    execSync("claude --version", { stdio: "pipe", timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Environment variables that may contain Claude Code credentials.
+ * Get Claude Code CLI version.
  */
-const CLAUDE_ENV_VARS = [
-  "CLAUDE_CODE_SUBSCRIPTION_TOKEN",
-  "CLAUDE_CODE_TOKEN",
-  "CLAUDE_SUBSCRIPTION_TOKEN",
-];
+function getClaudeCliVersion(): string | null {
+  try {
+    const output = execSync("claude --version", { encoding: "utf-8", timeout: 5000 });
+    return output.trim();
+  } catch {
+    return null;
+  }
+}
 
 /**
- * Check if Claude Code subscription is available and authenticated.
+ * Check if Claude Code subscription is available.
+ * This checks if the claude CLI is installed and accessible.
  */
 export async function isClaudeCodeSubscriptionAvailable(): Promise<boolean> {
-  const auth = await getClaudeCodeAuth();
-  return auth !== null;
+  return isClaudeCliInstalled();
 }
 
 /**
- * Get Claude Code subscription authentication.
- * Returns null if not available.
+ * Get Claude Code authentication info.
+ * Returns info about the CLI availability.
  */
 export async function getClaudeCodeAuth(): Promise<ClaudeCodeAuthResult | null> {
-  // First check environment variables
-  for (const envVar of CLAUDE_ENV_VARS) {
-    const token = process.env[envVar];
-    if (token && token.trim()) {
-      return {
-        subscriptionToken: token.trim(),
-        source: "env",
-      };
-    }
+  if (!isClaudeCliInstalled()) {
+    return null;
   }
 
-  // Then check file-based credentials
-  for (const credPath of CLAUDE_CREDENTIAL_PATHS) {
-    try {
-      const content = await fs.readFile(credPath, "utf-8");
-      const creds = JSON.parse(content);
-
-      // Look for subscription token in various formats
-      const token =
-        creds.subscriptionToken ??
-        creds.subscription_token ??
-        creds.token ??
-        creds.accessToken ??
-        creds.access_token;
-
-      if (token && typeof token === "string" && token.trim()) {
-        return {
-          subscriptionToken: token.trim(),
-          expires: creds.expires ?? creds.expiresAt ?? creds.expires_at,
-          email: creds.email ?? creds.user?.email,
-          source: "file",
-        };
-      }
-    } catch {
-      // File doesn't exist or isn't valid JSON, continue checking
-    }
-  }
-
-  return null;
+  return {
+    available: true,
+    version: getClaudeCliVersion() ?? undefined,
+    source: "cli",
+  };
 }
 
 /**
  * Check if a subscription token is expired.
+ * Not applicable for CLI-based auth - Claude handles this.
  */
-export function isTokenExpired(auth: ClaudeCodeAuthResult): boolean {
-  if (!auth.expires) {
-    return false; // No expiry set, assume valid
-  }
-
-  const now = Date.now();
-  const expiresMs = auth.expires > 1e12 ? auth.expires : auth.expires * 1000; // Handle seconds vs milliseconds
-
-  // Add 5 minute buffer
-  return now > expiresMs - 5 * 60 * 1000;
+export function isTokenExpired(_auth: ClaudeCodeAuthResult): boolean {
+  return false; // Claude CLI handles its own auth refresh
 }
 
 /**
- * Get a valid (non-expired) Claude Code auth, or null.
+ * Get a valid Claude Code auth, or null.
  */
 export async function getValidClaudeCodeAuth(): Promise<ClaudeCodeAuthResult | null> {
-  const auth = await getClaudeCodeAuth();
-
-  if (!auth) {
-    return null;
-  }
-
-  if (isTokenExpired(auth)) {
-    console.warn("[DilloBot] Claude Code subscription token is expired");
-    return null;
-  }
-
-  return auth;
+  return getClaudeCodeAuth();
 }
 
 /**
  * Refresh Claude Code subscription token if expired.
- *
- * Note: Full OAuth refresh would require Claude Code SDK integration.
- * This is a placeholder that returns null if expired.
+ * Not needed - Claude CLI handles its own auth.
  */
 export async function refreshClaudeCodeAuth(): Promise<ClaudeCodeAuthResult | null> {
-  // TODO: Implement OAuth refresh flow with Claude Code SDK
-  console.warn("[DilloBot] Claude Code token refresh not yet implemented");
   return getValidClaudeCodeAuth();
 }
 
 /**
- * Get authentication info for display (redacted).
+ * Get authentication info for display.
  */
 export async function getClaudeCodeAuthInfo(): Promise<{
   available: boolean;
-  source?: "file" | "env";
-  email?: string;
-  expired?: boolean;
-  tokenPrefix?: string;
+  source?: "cli";
+  version?: string;
 }> {
   const auth = await getClaudeCodeAuth();
 
@@ -155,8 +104,102 @@ export async function getClaudeCodeAuthInfo(): Promise<{
   return {
     available: true,
     source: auth.source,
-    email: auth.email,
-    expired: isTokenExpired(auth),
-    tokenPrefix: auth.subscriptionToken.slice(0, 8) + "...",
+    version: auth.version,
   };
+}
+
+/**
+ * Run a prompt through Claude Code CLI.
+ * Returns the response text.
+ */
+export async function runClaudeCodeCli(
+  prompt: string,
+  options?: {
+    systemPrompt?: string;
+    maxTurns?: number;
+    allowedTools?: string[];
+    timeoutMs?: number;
+    onOutput?: (text: string) => void;
+    abortSignal?: AbortSignal;
+  },
+): Promise<{ ok: boolean; response?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const args = ["--print"]; // Non-interactive mode
+
+    if (options?.maxTurns) {
+      args.push("--max-turns", String(options.maxTurns));
+    }
+
+    if (options?.allowedTools && options.allowedTools.length > 0) {
+      args.push("--allowedTools", options.allowedTools.join(","));
+    }
+
+    if (options?.systemPrompt) {
+      args.push("--system-prompt", options.systemPrompt);
+    }
+
+    // Add the prompt as the last argument
+    args.push(prompt);
+
+    const timeoutMs = options?.timeoutMs ?? 300000; // 5 minute default
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    const claude = spawn("claude", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: timeoutMs,
+    });
+
+    // Handle timeout
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      claude.kill("SIGTERM");
+    }, timeoutMs);
+
+    // Handle abort signal
+    if (options?.abortSignal) {
+      options.abortSignal.addEventListener("abort", () => {
+        claude.kill("SIGTERM");
+      });
+    }
+
+    claude.stdout.on("data", (data) => {
+      const text = data.toString();
+      stdout += text;
+      options?.onOutput?.(text);
+    });
+
+    claude.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    claude.on("close", (code) => {
+      clearTimeout(timeout);
+
+      if (options?.abortSignal?.aborted) {
+        resolve({ ok: false, error: "Request aborted" });
+        return;
+      }
+
+      if (timedOut) {
+        resolve({ ok: false, error: `Claude Code CLI timed out after ${timeoutMs}ms` });
+        return;
+      }
+
+      if (code === 0) {
+        resolve({ ok: true, response: stdout.trim() });
+      } else {
+        resolve({
+          ok: false,
+          error: stderr.trim() || `Claude Code CLI exited with code ${code}`,
+        });
+      }
+    });
+
+    claude.on("error", (err) => {
+      clearTimeout(timeout);
+      resolve({ ok: false, error: `Failed to spawn Claude Code CLI: ${err.message}` });
+    });
+  });
 }

@@ -29,7 +29,7 @@ export async function applyAuthChoiceClaudeCodeSdk(
   if (!isAvailable) {
     await params.prompter.note(
       [
-        "Claude Code subscription not detected.",
+        "Claude Code CLI not detected.",
         "",
         "To use Claude Code SDK authentication:",
         "1. Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
@@ -58,12 +58,10 @@ export async function applyAuthChoiceClaudeCodeSdk(
   }
 
   // Show confirmation
-  const sourceLabel =
-    authInfo.source === "env" ? "environment variable" : "~/.claude/credentials.json";
-  const emailInfo = authInfo.email ? ` (${authInfo.email})` : "";
+  const versionInfo = authInfo.version ? ` (${authInfo.version})` : "";
 
   const confirmed = await params.prompter.confirm({
-    message: `Use Claude Code subscription${emailInfo} from ${sourceLabel}?`,
+    message: `Use Claude Code CLI${versionInfo} for authentication?`,
     initialValue: true,
   });
 
@@ -81,7 +79,7 @@ export async function applyAuthChoiceClaudeCodeSdk(
     credential: {
       type: "subscription",
       provider,
-      token: auth.subscriptionToken,
+      token: "claude-agent-sdk", // Marker token - actual auth handled by SDK
     },
   });
 
@@ -99,9 +97,9 @@ export async function applyAuthChoiceClaudeCodeSdk(
       "Benefits:",
       "- No API keys to manage",
       "- Uses your Claude Code subscription",
-      "- Automatic token refresh",
+      "- Automatic authentication via Claude CLI",
       "",
-      "Your credentials are stored securely in the encrypted vault.",
+      "DilloBot will use the Claude Agent SDK for all requests.",
     ].join("\n"),
     "Success",
   );

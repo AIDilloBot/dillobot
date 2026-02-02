@@ -1,12 +1,28 @@
 /**
  * DilloBot Claude Code SDK Runner
  *
- * Provides native integration with Claude Code SDK for using
+ * Provides native integration with Claude Agent SDK for using
  * Claude Code subscription as the LLM provider.
  */
 
 import type { OpenClawConfig } from "../config/config.js";
-import { getValidClaudeCodeAuth, isClaudeCodeSubscriptionAvailable } from "./claude-code-sdk-auth.js";
+
+// Dynamic import for the Claude Agent SDK
+let sdkModule: typeof import("@anthropic-ai/claude-agent-sdk") | null = null;
+
+async function loadSdk() {
+  if (!sdkModule) {
+    try {
+      sdkModule = await import("@anthropic-ai/claude-agent-sdk");
+    } catch (error) {
+      console.error("[DilloBot] Failed to load Claude Agent SDK:", error);
+      throw new Error(
+        "Claude Agent SDK not available. Please install @anthropic-ai/claude-agent-sdk",
+      );
+    }
+  }
+  return sdkModule;
+}
 
 /**
  * Parameters for running Claude Code SDK agent.
@@ -47,7 +63,7 @@ export interface ClaudeCodeSdkRunResult {
 /**
  * Check if Claude Code SDK provider is selected.
  */
-export function isClaudeCodeSdkProvider(provider: string, config?: OpenClawConfig): boolean {
+export function isClaudeCodeSdkProvider(provider: string, _config?: OpenClawConfig): boolean {
   const normalized = provider.trim().toLowerCase();
   return (
     normalized === "claude-code-agent" ||
@@ -58,7 +74,7 @@ export function isClaudeCodeSdkProvider(provider: string, config?: OpenClawConfi
 }
 
 /**
- * Run agent using Claude Code SDK.
+ * Run agent using Claude Agent SDK.
  *
  * This function provides native integration with Claude Code's subscription
  * authentication, bypassing the need for API keys.
@@ -66,59 +82,124 @@ export function isClaudeCodeSdkProvider(provider: string, config?: OpenClawConfi
  * @param params Run parameters
  * @returns Run result
  */
-export async function runClaudeCodeSdkAgent(params: ClaudeCodeSdkRunParams): Promise<ClaudeCodeSdkRunResult> {
-  // Check if Claude Code SDK is available
-  const available = await isClaudeCodeSubscriptionAvailable();
-  if (!available) {
-    return {
-      ok: false,
-      error: "Claude Code SDK not available. Please authenticate with Claude Code CLI.",
-    };
-  }
-
-  // Get authentication
-  const auth = await getValidClaudeCodeAuth();
-  if (!auth) {
-    return {
-      ok: false,
-      error: "Claude Code subscription token is missing or expired.",
-    };
-  }
-
+export async function runClaudeCodeSdkAgent(
+  params: ClaudeCodeSdkRunParams,
+): Promise<ClaudeCodeSdkRunResult> {
   try {
-    // TODO: Integrate with actual Claude Code Agent SDK
-    // For now, this is a placeholder that shows the structure
-    console.info("[DilloBot] Running with Claude Code SDK");
+    const sdk = await loadSdk();
+
+    console.info("[DilloBot] Running with Claude Agent SDK");
     console.info(`[DilloBot] Session: ${params.sessionId}`);
-    console.info(`[DilloBot] Model: ${params.model ?? "claude-opus-4-5"}`);
-    console.info(`[DilloBot] Token source: ${auth.source}`);
+    console.info(`[DilloBot] Model: ${params.model ?? "claude-sonnet-4-5"}`);
+    console.info(`[DilloBot] Workspace: ${params.workspaceDir}`);
 
-    // The actual implementation would use the Claude Code Agent SDK:
-    // import { createAgent, runAgent } from "@anthropic-ai/claude-code-sdk";
-    //
-    // const agent = createAgent({
-    //   subscriptionToken: auth.subscriptionToken,
-    //   model: params.model ?? "claude-opus-4-5",
-    //   systemPrompt: params.extraSystemPrompt,
-    // });
-    //
-    // const result = await runAgent(agent, {
-    //   prompt: params.prompt,
-    //   workspaceDir: params.workspaceDir,
-    //   onPartialReply: params.onPartialReply,
-    //   abortSignal: params.abortSignal,
-    // });
+    // Create abort controller
+    const abortController = new AbortController();
 
-    // Placeholder response for now
-    // In production, this would be replaced with actual SDK calls
-    return {
-      ok: false,
-      error:
-        "Claude Code SDK integration is not yet fully implemented. " +
-        "Please use the Anthropic API provider as a fallback. " +
-        "Token was found at: " +
-        auth.source,
-    };
+    // Link to the provided abort signal if present
+    if (params.abortSignal) {
+      params.abortSignal.addEventListener("abort", () => {
+        abortController.abort();
+      });
+    }
+
+    // Set up timeout
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, params.timeoutMs);
+
+    try {
+      // Run the query using Claude Agent SDK
+      const queryIterator = sdk.query({
+        prompt: params.prompt,
+        options: {
+          abortController,
+          cwd: params.workspaceDir,
+          model: params.model ?? "claude-sonnet-4-5",
+          // Use default tools
+          tools: { type: "preset", preset: "claude_code" },
+          // Allow all tools automatically for bot usage
+          permissionMode: "bypassPermissions",
+          // Disable interactive mode
+          maxTurns: 10,
+        },
+      });
+
+      let fullReply = "";
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      // Iterate over the query messages
+      for await (const message of queryIterator) {
+        // Handle different message types
+        if (message.type === "assistant") {
+          // Assistant message with text content
+          const betaMessage = message.message;
+          if (betaMessage?.content) {
+            for (const block of betaMessage.content) {
+              if ("text" in block && typeof block.text === "string") {
+                fullReply += block.text;
+                // Call streaming callback
+                await params.onPartialReply?.({ text: block.text });
+              }
+            }
+          }
+        } else if (message.type === "result") {
+          // Final result - check if success or error
+          if (message.subtype === "success") {
+            // SDKResultSuccess has result and usage
+            const successMsg = message as {
+              result: string;
+              usage: { input_tokens: number; output_tokens: number };
+            };
+            fullReply = successMsg.result ?? fullReply;
+            if (successMsg.usage) {
+              inputTokens = successMsg.usage.input_tokens ?? 0;
+              outputTokens = successMsg.usage.output_tokens ?? 0;
+            }
+          } else {
+            // SDKResultError
+            const errorMsg = message as { errors?: string[] };
+            const errorText = errorMsg.errors?.join("; ") ?? "Unknown error from Claude Agent SDK";
+            return {
+              ok: false,
+              reply: fullReply,
+              error: errorText,
+            };
+          }
+        } else if (message.type === "stream_event") {
+          // Streaming events - extract text delta
+          const streamEvent = message as { event?: { type?: string; delta?: { text?: string } } };
+          if (streamEvent.event?.type === "content_block_delta" && streamEvent.event.delta?.text) {
+            await params.onPartialReply?.({ text: streamEvent.event.delta.text });
+          }
+        } else if (message.type === "tool_progress" || message.type === "tool_use_summary") {
+          // Tool usage events
+          params.onAgentEvent?.(message);
+        }
+
+        // Check for abort
+        if (abortController.signal.aborted) {
+          return {
+            ok: false,
+            aborted: true,
+            reply: fullReply,
+            error: "Request was aborted",
+          };
+        }
+      }
+
+      return {
+        ok: true,
+        reply: fullReply,
+        tokensUsed: {
+          input: inputTokens,
+          output: outputTokens,
+        },
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -133,7 +214,7 @@ export async function runClaudeCodeSdkAgent(params: ClaudeCodeSdkRunParams): Pro
 
     return {
       ok: false,
-      error: `Claude Code SDK error: ${errorMessage}`,
+      error: `Claude Agent SDK error: ${errorMessage}`,
     };
   }
 }
@@ -187,8 +268,12 @@ export function getClaudeCodeSdkProviderConfig() {
  * This is called when Claude Code SDK is not available or fails.
  */
 export async function shouldFallbackToAnthropicApi(): Promise<boolean> {
-  const available = await isClaudeCodeSubscriptionAvailable();
-  return !available;
+  try {
+    await loadSdk();
+    return false; // SDK is available, no fallback needed
+  } catch {
+    return true; // SDK not available, fall back to API
+  }
 }
 
 /**
@@ -202,5 +287,5 @@ export function getClaudeCodeFallbackProvider(): string {
  * Get fallback model ID when Claude Code SDK is unavailable.
  */
 export function getClaudeCodeFallbackModel(): string {
-  return "claude-opus-4-5";
+  return "claude-sonnet-4-5";
 }

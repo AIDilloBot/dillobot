@@ -12,6 +12,8 @@ import {
   markAuthProfileGood,
   markAuthProfileUsed,
 } from "../auth-profiles.js";
+// DILLOBOT: Claude Agent SDK integration
+import { isClaudeCodeSdkProvider, runClaudeCodeSdkAgent } from "../claude-code-sdk-runner.js";
 import {
   CONTEXT_WINDOW_HARD_MIN_TOKENS,
   CONTEXT_WINDOW_WARN_BELOW_TOKENS,
@@ -98,6 +100,54 @@ export async function runEmbeddedPiAgent(
       const agentDir = params.agentDir ?? resolveOpenClawAgentDir();
       const fallbackConfigured =
         (params.config?.agents?.defaults?.model?.fallbacks?.length ?? 0) > 0;
+
+      // DILLOBOT: Check if we should use Claude Agent SDK
+      if (isClaudeCodeSdkProvider(provider)) {
+        log.info(`[DilloBot] Using Claude Agent SDK for provider: ${provider}`);
+        const sdkResult = await runClaudeCodeSdkAgent({
+          sessionId: params.sessionId,
+          sessionKey: params.sessionKey,
+          sessionFile: params.sessionFile,
+          workspaceDir: resolvedWorkspace,
+          config: params.config,
+          prompt: scrubAnthropicRefusalMagic(params.prompt ?? ""),
+          model: modelId,
+          timeoutMs: params.timeoutMs,
+          runId: params.runId,
+          extraSystemPrompt: params.extraSystemPrompt,
+          abortSignal: params.abortSignal,
+          onPartialReply: params.onPartialReply
+            ? async (payload) => {
+                await params.onPartialReply?.(payload);
+              }
+            : undefined,
+        });
+
+        const elapsed = Date.now() - started;
+        if (sdkResult.ok) {
+          return {
+            payloads: [{ text: sdkResult.reply ?? "" }],
+            meta: {
+              durationMs: elapsed,
+              agentMeta: {
+                sessionId: params.sessionId,
+                provider,
+                model: modelId,
+                usage: sdkResult.tokensUsed
+                  ? {
+                      input: sdkResult.tokensUsed.input,
+                      output: sdkResult.tokensUsed.output,
+                    }
+                  : undefined,
+              },
+            },
+          };
+        } else {
+          // SDK failed, throw error to trigger fallback
+          throw new Error(sdkResult.error ?? "Claude Agent SDK failed");
+        }
+      }
+
       await ensureOpenClawModelsJson(params.config, agentDir);
 
       const { model, error, authStorage, modelRegistry } = resolveModel(
