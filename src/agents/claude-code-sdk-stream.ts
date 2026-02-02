@@ -449,32 +449,11 @@ async function processSdkQuery(
             }
             isInToolExecution = false; // We're back to receiving text
           } else if (streamEvent.event.content_block?.type === "tool_use") {
-            // Tool execution starting - flush current text to channel before tools run
+            // Tool execution starting
+            // Note: We do NOT emit text_end here anymore to avoid fragmenting the response.
+            // The complete text will be emitted at the end, ensuring proper markdown formatting.
+            // Users see streaming text via text_delta events; the final text_end sends to Telegram.
             isInToolExecution = true;
-
-            // Emit text_end to flush current content to the messaging channel
-            // This ensures user sees "Let me check..." BEFORE tool execution
-            if (currentTextIndex >= 0 && textStartEmitted && currentText.trim()) {
-              const cleanedForFlush = stripToolSyntaxLight(currentText).trim();
-              if (cleanedForFlush) {
-                // Update partial message with current clean text
-                (partialMessage.content[currentTextIndex] as TextContent).text = cleanedForFlush;
-
-                // Emit text_end to trigger onBlockReply and send to channel
-                stream.push({
-                  type: "text_end",
-                  contentIndex: currentTextIndex,
-                  content: cleanedForFlush,
-                  partial: partialMessage,
-                });
-
-                // Reset for next text block (after tool execution)
-                currentTextIndex = -1;
-                currentText = "";
-                lastEmittedLength = 0;
-                textStartEmitted = false;
-              }
-            }
           }
         }
 

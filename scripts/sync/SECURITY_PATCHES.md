@@ -823,13 +823,17 @@ if (streamEvent.event?.type === "content_block_delta") {
 }
 ```
 
-2. **Typing indicators during tool execution:**
+2. **Tool execution handling (no text fragmentation):**
 ```typescript
 if (streamEvent.event.content_block?.type === "tool_use") {
-  // Emit status message when tool execution starts
-  stream.push({ type: "text_delta", delta: "\n\n_Working..._\n\n", ... });
+  // Note: We do NOT emit text_end here to avoid fragmenting the response.
+  // The complete text will be emitted at the end, ensuring proper markdown formatting.
+  // Users see streaming text via text_delta events; the final text_end sends to Telegram.
+  isInToolExecution = true;
 }
 ```
+
+**Important:** We previously emitted `text_end` when `tool_use` blocks started, which sent partial text to Telegram before tools ran. This caused text fragmentation where markdown formatting could be split across messages (e.g., "**Bottom" in one message, "line:**" in another). The fix is to accumulate all text and only emit `text_end` at the end with the complete response.
 
 3. **Light stripping function for streaming:**
 ```typescript
@@ -847,9 +851,9 @@ function stripToolSyntaxLight(text: string): string {
 - No indication that tool execution was in progress
 
 **After this fix:**
-- Text streams to user in real-time ("Let me check...")
-- "_Working..._" status shown during tool execution
-- Partial responses emitted between tool calls
+- Text streams to internal UIs in real-time via `text_delta` events
+- Complete response sent to messaging channels (Telegram, etc.) at the end
+- Proper markdown formatting preserved (no mid-formatting splits)
 - Final cleanup removes any tool syntax that slipped through
 
 **Why:** Users were waiting 30+ seconds with no feedback, not knowing if the bot was working or broken. Now they see immediate responses and status updates.
