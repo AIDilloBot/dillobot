@@ -582,3 +582,66 @@ User's `~/.openclaw/openclaw.json` should have:
 - 35. [ ] `claude-code-agent` bypass in `src/agents/model-auth.ts` resolveApiKeyForProvider()
 - 36. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-stream.ts`
 - 37. [ ] SDK configured with `tools: []`, `maxTurns: 1`, `persistSession: false`
+- 38. [ ] `stripToolUseXml()` function in claude-code-sdk-stream.ts
+- 39. [ ] SDK stream buffers text (no text_delta during streaming, emits clean at end)
+- 40. [ ] `escapeForPrompt()` has optional `stripUnicode` parameter (default: false)
+- 41. [ ] `tag_chars` pattern severity is "low" not "high" in injection-filter.ts
+- 42. [ ] `unifyChannels` option in SessionConfig type (types.base.ts)
+- 43. [ ] `unifyChannels` in SessionSchema (zod-schema.session.ts)
+- 44. [ ] `unifyChannels` handling in buildAgentPeerSessionKey (session-key.ts)
+- 45. [ ] `unifyChannels` passed through resolve-route.ts
+
+---
+
+### 15. SDK Stream Buffering for Clean Output
+
+**Purpose:** The Claude Code SDK outputs `<tool_use>` XML blocks as part of its "show your work" behavior. For chatbot use, we buffer all text and emit clean output at the end.
+
+**File:** `src/agents/claude-code-sdk-stream.ts` (DilloBot-only file)
+
+**Key Functions:**
+- `stripToolUseXml()` - Removes `<tool_use>...</tool_use>` XML blocks from text
+- Text is buffered during streaming (no text_delta events emitted)
+- At end, XML is stripped and clean text is emitted as single text_start/delta/end
+
+**Why:** Users should see clean responses, not internal tool-use XML that Claude Code CLI normally shows.
+
+---
+
+### 16. Security Filter Unicode Stripping Fix
+
+**Purpose:** The original code stripped Unicode tag characters from ALL messages, causing legitimate Telegram/Slack content to be lost. Now stripping is selective.
+
+**Files:**
+- `src/security-hardening/injection/injection-filter.ts`
+- `src/security-hardening/injection/content-security.ts`
+
+**Changes:**
+- `escapeForPrompt()` now has optional `stripUnicode` parameter (default: false)
+- Only strip on specific dangerous patterns (bidi, zero_width), NOT tag_chars
+- `tag_chars` severity downgraded from "high" to "low" (false positives on legitimate messages)
+
+**Why:** Telegram messages were being stripped to empty, causing "NO_REPLY" responses.
+
+---
+
+### 17. Unified Sessions Across Channels
+
+**Purpose:** By default, OpenClaw creates separate sessions per channel. DilloBot needs unified context across all platforms.
+
+**Files:**
+- `src/config/types.base.ts` - Added `unifyChannels?: boolean` to SessionConfig
+- `src/config/zod-schema.session.ts` - Added `unifyChannels` to schema
+- `src/routing/session-key.ts` - Added `unifyChannels` param to buildAgentPeerSessionKey
+- `src/routing/resolve-route.ts` - Pass `unifyChannels` through routing
+
+**Config:**
+```json
+"session": {
+  "unifyChannels": true
+}
+```
+
+**Behavior:** When `unifyChannels: true`, ALL messages (Slack channels, Telegram DMs, etc.) route to `agent:main:main` session, giving unified memory across platforms.
+
+**Why:** Users expect Korah to be the same bot with same memory whether on Slack, Telegram, or other channels.
