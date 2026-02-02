@@ -234,6 +234,14 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: SDK stream strips XML-hybrid format (tool:exec with <command> tags)
+if grep -q '<command>' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ XML-hybrid tool format stripping (tool:exec <command>) present"
+else
+    echo "⚠️  WARNING: XML-hybrid tool format stripping missing - tool:exec blocks may appear"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check: SDK runner has provider detection function
 if grep -q "export function isClaudeCodeSdkProvider" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
     echo "✅ isClaudeCodeSdkProvider exported from claude-code-sdk-runner.ts"

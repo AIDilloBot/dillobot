@@ -613,6 +613,16 @@ User's `~/.openclaw/openclaw.json` should have:
 // XML blocks
 /<tool_use>[\s\S]*?<\/tool_use>/g
 
+// XML-hybrid format: tool:exec with <command> tags
+// Format: tool:exec\n<command>...</command>\n</tool:exec>
+/tool:exec\s*\n\s*<command>[\s\S]*?<\/command>\s*\n?\s*<\/tool:exec>/gi
+
+// Generic hybrid: tool:name ... </tool:name>
+/tool:[a-z_-]+\s*\n[\s\S]*?<\/tool:[a-z_-]+>/gi
+
+// Orphaned <command>...</command> blocks
+/<command>[\s\S]*?<\/command>/gi
+
 // Text-format tool invocations with multi-line output (tool:read, tool:exec, tool:bash, etc.)
 // Uses negative lookahead to capture all output until next tool: or end
 /^tool:[a-z_-]+\s*\n(?:(?!tool:)[^\n]*\n?)*/gim
