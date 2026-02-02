@@ -48,9 +48,11 @@ const CRITICAL_PATTERNS: Array<{
   {
     pattern: /[\uE0000-\uE007F]/,
     name: "tag_chars",
-    severity: "high",
+    // DILLOBOT: Downgraded from "high" - these appear in legitimate Telegram/Slack
+    // message formatting (emoji sequences, etc.) and cause false positives
+    severity: "low",
     category: "unicode",
-    description: "Unicode tag characters (invisible, can encode hidden data)",
+    description: "Unicode tag characters (may be legitimate formatting)",
   },
   {
     pattern: /[\u2061-\u2064]/,
@@ -272,11 +274,14 @@ export function stripDangerousUnicode(content: string): string {
  *
  * @param content The content to escape
  * @param source Optional source label
+ * @param stripUnicode Whether to strip dangerous unicode (default: false)
  * @returns Escaped content with security boundaries
  */
-export function escapeForPrompt(content: string, source?: string): string {
+export function escapeForPrompt(content: string, source?: string, stripUnicode = false): string {
   const sourceLabel = source ? ` (source: ${source})` : "";
-  const sanitized = stripDangerousUnicode(content);
+  // DILLOBOT: Only strip unicode if explicitly requested
+  // Stripping was causing legitimate message content to be removed
+  const sanitized = stripUnicode ? stripDangerousUnicode(content) : content;
 
   return [
     `<<<EXTERNAL_UNTRUSTED_CONTENT${sourceLabel}>>>`,

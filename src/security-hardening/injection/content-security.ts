@@ -272,7 +272,18 @@ export async function processContentSecurity(
 
   // Step 4: Wrap external content if needed
   if (cfg.wrapExternalContent && requiresWrapping(result.source)) {
-    result.processedContent = escapeForPrompt(result.processedContent, result.source);
+    // DILLOBOT: Only strip unicode if we detected specific dangerous patterns
+    // NOTE: We intentionally exclude "tag_chars" and "invisible_operators" from stripping
+    // because these can appear in legitimate Telegram/Slack messages and stripping them
+    // causes message content loss. We still LOG their detection but don't strip.
+    const shouldStripUnicode =
+      cfg.stripUnicode &&
+      result.quickFilterFindings.some((p) => p.includes("bidi") || p.includes("zero_width"));
+    result.processedContent = escapeForPrompt(
+      result.processedContent,
+      result.source,
+      shouldStripUnicode,
+    );
     result.wrapped = true;
   }
 
