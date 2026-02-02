@@ -725,17 +725,22 @@ User's `~/.openclaw/openclaw.json` should have:
 
 ### 19. SDK Tool Execution via Preset Tools
 
-**Purpose:** Enable actual tool execution when using Claude Code SDK provider. Without proper tool configuration, Claude outputs text-based tool syntax (like `tool:exec`) instead of proper `tool_use` blocks that pi-agent-core can execute.
+**Purpose:** Enable actual tool execution when using Claude Code SDK provider. The SDK handles the full agentic loop including tool execution internally.
 
 **File:** `src/agents/claude-code-sdk-stream.ts`
+
+**Key Architecture Understanding:**
+- The Claude Agent SDK is designed to handle the complete agentic loop
+- When using preset tools, the SDK executes tools internally using Claude Code's implementations
+- The SDK manages: API calls → tool_use blocks → tool execution → tool results → Claude response
+- We do NOT intercept tool execution - the SDK handles it end-to-end
 
 **Key Changes:**
 
 1. **`getSdkToolsConfig()` function:**
 ```typescript
 function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
-  // If context has tools, use the Claude Code preset so Claude outputs proper tool_use blocks
-  // With maxTurns: 1, SDK returns control after tool_use, letting pi-agent-core execute
+  // Use preset tools so SDK can execute Claude Code tools internally
   if (tools && tools.length > 0) {
     return { type: "preset", preset: "claude_code" };
   }
@@ -743,42 +748,47 @@ function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
 }
 ```
 
-2. **SDK query configuration:**
+2. **SDK query configuration with proper maxTurns:**
 ```typescript
 const queryIterator = sdk.query({
   prompt,
   options: {
-    // Use preset tools when context has tools - enables proper tool_use block output
-    tools: toolsConfig,  // Was: tools: []
-    maxTurns: 1,  // Returns control after tool_use for pi-agent-core execution
+    tools: toolsConfig,  // preset: "claude_code" when tools present
+    // Let Claude work until done - no artificial turn limit
+    // Each "turn" = Claude response + tool execution + result processing
+    // Complex tasks may need many turns (reading files, running commands, etc.)
+    maxTurns: 100,  // Safety limit against infinite loops
     // ...
   },
 });
 ```
 
 **How it works:**
-1. When `context.tools` is populated (from pi-agent-core), use preset tools
-2. Claude sees tools available and outputs proper `tool_use` blocks (not text syntax)
-3. With `maxTurns: 1`, SDK returns control after Claude outputs tool_use blocks
-4. pi-agent-core receives tool_use blocks and executes them using OpenClaw's tools
-5. Tool results feed back for next turn
+1. When `context.tools` is populated, use `{ type: "preset", preset: "claude_code" }`
+2. Claude outputs proper `tool_use` blocks (Bash, Read, Edit, etc.)
+3. SDK executes tools internally using Claude Code's tool implementations
+4. SDK sends tool results back to Claude
+5. Claude processes results and either calls more tools or responds
+6. Loop continues until Claude finishes (stop_reason: end_turn) or maxTurns hit
+
+**Critical: maxTurns must be high enough:**
+- `maxTurns: 1` = BROKEN - stops after tool_use before Claude can respond
+- `maxTurns: 100` = allows complex multi-tool workflows to complete
+- Each "turn" includes: Claude response → tool execution → result back to Claude
 
 **Before this fix:**
-- SDK was configured with `tools: []`
-- Claude had no tools available to the API
-- Claude output text like `tool:exec\ncommand` (its internal syntax when no tools)
-- pi-agent-core couldn't parse text-based syntax
-- No tools actually executed
+- SDK was configured with `tools: []` or `maxTurns: 1`
+- Claude either output text syntax ("tool:exec") or got cut off after tool execution
+- Tools never completed and Claude never gave final answers
 
 **After this fix:**
-- SDK uses preset tools when context has tools
-- Claude outputs proper `tool_use` content blocks
-- pi-agent-core intercepts and executes tools
-- Actual tool execution happens
+- SDK uses preset tools with high maxTurns
+- SDK handles full agentic loop internally
+- Claude can execute multiple tools and respond with final answer
 
-**Why:** Users were seeing tool intentions in chat (e.g., "Let me check: tool:exec") but tools never actually executed, making the bot non-functional for any task requiring tools.
+**Why:** Users were seeing partial responses like "Let me check:" followed by nothing, because maxTurns: 1 stopped the SDK before Claude could process tool results and respond.
 
 **Verification:**
-- Check `getSdkToolsConfig()` function exists
-- Check SDK query uses `toolsConfig` not hardcoded `tools: []`
-- Check preset is returned when `tools.length > 0`
+- Check `getSdkToolsConfig()` returns preset when tools present
+- Check `maxTurns` is 100 (not 1)
+- Check SDK query uses `toolsConfig` variable

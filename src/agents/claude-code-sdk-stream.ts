@@ -32,25 +32,17 @@ type SdkToolsConfig = { type: "preset"; preset: "claude_code" } | string[];
 /**
  * Determine SDK tools configuration based on context.
  *
- * DILLOBOT: The SDK doesn't support custom tool definitions. It only accepts:
- * - { type: 'preset', preset: 'claude_code' } - Use all Claude Code tools
- * - string[] - Array of tool names
+ * DILLOBOT: Use preset tools to enable Claude to output proper tool_use blocks.
+ * With maxTurns: 1, the SDK should return after tool_use output without executing.
  *
- * When tools are present in the context, we use the preset to enable proper
- * tool_use block output. pi-agent-core will then execute the tools.
+ * Debugging: Testing preset to see what the SDK returns.
  */
 function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
-  // If context has tools, use the Claude Code preset so Claude outputs proper tool_use blocks
-  // With maxTurns: 1, SDK returns control after tool_use, letting pi-agent-core execute
   if (tools && tools.length > 0) {
-    console.log(
-      `[DilloBot SDK Stream] Using preset tools for ${tools.length} tools:`,
-      tools.map((t) => t.name).slice(0, 10),
-    );
+    console.log(`[DilloBot SDK Stream] Using preset tools (${tools.length} tools in context)`);
     return { type: "preset", preset: "claude_code" };
   }
-
-  // No tools - use empty array
+  console.log(`[DilloBot SDK Stream] No tools in context, using empty array`);
   return [];
 }
 
@@ -140,6 +132,12 @@ function stripToolUseXml(text: string): string {
   // Strip tool: at end of text (no trailing newline)
   // Catches "...checking:\n\ntool:exec" where tool:exec is the last thing
   result = result.replace(/\btool:[a-z_-]+\s*$/gi, "");
+
+  // FINAL CATCH-ALL: Strip any remaining tool: patterns that look like SDK tool calls
+  // This catches edge cases where tool:name appears in unexpected positions
+  // Only strip if it looks like a tool invocation (word boundary before, not part of URL/path)
+  // Match: whitespace/newline/colon + "tool:" + toolname + optional whitespace/newline/end
+  result = result.replace(/(?:^|[\s:])tool:[a-z_-]+(?:\s|$)/gim, " ");
 
   // Strip "checking/reading/looking" status lines that precede tool calls
   // These are verbose status messages the SDK outputs
@@ -288,8 +286,8 @@ async function processSdkQuery(
     // With maxTurns: 1, the SDK returns control after Claude outputs tool_use blocks,
     // allowing pi-agent-core to execute the tools using OpenClaw's tool implementations.
     const toolsLabel = Array.isArray(toolsConfig)
-      ? `${toolsConfig.length} tool names`
-      : "preset:claude_code";
+      ? `${toolsConfig.length} tool names: [${toolsConfig.slice(0, 5).join(", ")}${toolsConfig.length > 5 ? "..." : ""}]`
+      : "preset (unused)";
     console.log(`[DilloBot SDK Stream] Configuring query with tools: ${toolsLabel}`);
 
     const queryIterator = sdk.query({
@@ -301,9 +299,10 @@ async function processSdkQuery(
         // When tools are needed, use preset so Claude outputs tool_use blocks
         // pi-agent-core will intercept and execute these tool calls
         tools: toolsConfig,
-        // Single turn only - pi-agent-core manages the agentic loop
-        // This ensures SDK returns control after tool_use output
-        maxTurns: 1,
+        // Let Claude work until done - no artificial turn limit
+        // The SDK will stop when Claude finishes (stop_reason: end_turn)
+        // Set high limit as safety net against infinite loops
+        maxTurns: 100,
         // Don't persist to SDK session files - OpenClaw manages sessions
         persistSession: false,
         // Pass the system prompt
@@ -481,7 +480,7 @@ async function processSdkQuery(
       // Strip Claude Code's tool_use XML blocks from output
       const cleanText = stripToolUseXml(currentText);
       console.log(
-        "[DilloBot SDK Stream] Stripping XML. Before:",
+        "[DilloBot SDK Stream] Stripping tool syntax. Before:",
         currentText.length,
         "After:",
         cleanText.length,

@@ -260,6 +260,20 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: SDK stream has high maxTurns for multi-tool workflows
+# maxTurns: 1 is BROKEN - stops before Claude can respond after tool execution
+if grep -q 'maxTurns: 100' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "✅ maxTurns: 100 (allows multi-tool workflows)"
+elif grep -q 'maxTurns: 1' src/agents/claude-code-sdk-stream.ts 2>/dev/null; then
+    echo "❌ CRITICAL: maxTurns: 1 will break tool execution!"
+    echo "   SDK stops after tool_use before Claude can process results and respond"
+    echo "   Change to maxTurns: 100 to allow complete agentic workflows"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "⚠️  WARNING: maxTurns setting not found or unexpected value"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check: SDK runner has provider detection function
 if grep -q "export function isClaudeCodeSdkProvider" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
     echo "✅ isClaudeCodeSdkProvider exported from claude-code-sdk-runner.ts"
