@@ -209,29 +209,21 @@ async function processSdkQuery(
         if (betaMessage?.content) {
           for (const block of betaMessage.content) {
             if ("text" in block && typeof block.text === "string") {
-              // Start new text block if needed
+              // DILLOBOT: Buffer text internally, don't emit deltas during streaming
+              // This prevents <tool_use> XML from appearing to users during streaming
+              // We'll emit the clean text at the end after stripping XML
               if (currentTextIndex < 0) {
                 currentTextIndex = partialMessage.content.length;
                 partialMessage.content.push({ type: "text", text: "" });
-                stream.push({
-                  type: "text_start",
-                  contentIndex: currentTextIndex,
-                  partial: partialMessage,
-                });
+                // Don't emit text_start yet - wait for text_end with clean content
               }
 
-              // Emit delta for any new text
+              // Accumulate text but don't emit deltas
               const newText = block.text;
               if (newText.length > currentText.length) {
-                const delta = newText.slice(currentText.length);
                 currentText = newText;
                 (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
-                stream.push({
-                  type: "text_delta",
-                  contentIndex: currentTextIndex,
-                  delta,
-                  partial: partialMessage,
-                });
+                // NOTE: Intentionally not emitting text_delta here
               }
             } else if ("type" in block && block.type === "tool_use") {
               // SDK returned a tool call - map it to ToolCall format
@@ -290,42 +282,30 @@ async function processSdkQuery(
           };
         };
 
+        // DILLOBOT: Buffer streaming content, don't emit deltas
         // Handle content_block_start
         if (streamEvent.event?.type === "content_block_start") {
           if (streamEvent.event.content_block?.type === "text") {
             if (currentTextIndex < 0) {
               currentTextIndex = partialMessage.content.length;
               partialMessage.content.push({ type: "text", text: "" });
-              stream.push({
-                type: "text_start",
-                contentIndex: currentTextIndex,
-                partial: partialMessage,
-              });
+              // Don't emit text_start - will emit with clean content at end
             }
           }
         }
 
-        // Handle content_block_delta
+        // Handle content_block_delta - buffer only, don't emit
         if (streamEvent.event?.type === "content_block_delta") {
           if (streamEvent.event.delta?.type === "text_delta" && streamEvent.event.delta.text) {
             if (currentTextIndex < 0) {
               currentTextIndex = partialMessage.content.length;
               partialMessage.content.push({ type: "text", text: "" });
-              stream.push({
-                type: "text_start",
-                contentIndex: currentTextIndex,
-                partial: partialMessage,
-              });
             }
+            // Buffer the text but don't emit delta
             const delta = streamEvent.event.delta.text;
             currentText += delta;
             (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
-            stream.push({
-              type: "text_delta",
-              contentIndex: currentTextIndex,
-              delta,
-              partial: partialMessage,
-            });
+            // NOTE: Intentionally not emitting text_delta - will emit clean at end
           }
         }
       } else if (message.type === "result") {
@@ -341,23 +321,10 @@ async function processSdkQuery(
             if (currentTextIndex < 0) {
               currentTextIndex = partialMessage.content.length;
               partialMessage.content.push({ type: "text", text: "" });
-              stream.push({
-                type: "text_start",
-                contentIndex: currentTextIndex,
-                partial: partialMessage,
-              });
             }
-            const delta = successMsg.result.slice(currentText.length);
-            if (delta) {
-              currentText = successMsg.result;
-              (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
-              stream.push({
-                type: "text_delta",
-                contentIndex: currentTextIndex,
-                delta,
-                partial: partialMessage,
-              });
-            }
+            // Just update the buffer - clean content will be emitted at text_end
+            currentText = successMsg.result;
+            (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
           }
 
           // Update usage
@@ -385,10 +352,10 @@ async function processSdkQuery(
       }
     }
 
-    // Emit text_end if we had text content
+    // DILLOBOT: Emit all text events at the end with clean content
+    // We buffered text during streaming to avoid showing <tool_use> XML to users
     if (currentTextIndex >= 0) {
-      // DILLOBOT: Strip Claude Code's tool_use XML blocks from output
-      // This is necessary because the SDK outputs these as part of its "show your work" behavior
+      // Strip Claude Code's tool_use XML blocks from output
       const cleanText = stripToolUseXml(currentText);
       console.log(
         "[DilloBot SDK Stream] Stripping XML. Before:",
@@ -400,6 +367,24 @@ async function processSdkQuery(
       // Update the partial message with clean text
       (partialMessage.content[currentTextIndex] as TextContent).text = cleanText;
 
+      // Emit text_start now (we skipped it during streaming)
+      stream.push({
+        type: "text_start",
+        contentIndex: currentTextIndex,
+        partial: partialMessage,
+      });
+
+      // Emit the clean text as a single delta
+      if (cleanText) {
+        stream.push({
+          type: "text_delta",
+          contentIndex: currentTextIndex,
+          delta: cleanText,
+          partial: partialMessage,
+        });
+      }
+
+      // Emit text_end
       stream.push({
         type: "text_end",
         contentIndex: currentTextIndex,
