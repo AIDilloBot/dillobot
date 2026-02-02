@@ -1,17 +1,11 @@
-# DilloBot
-
 <p align="center">
-  <img src="https://dillo.bot/logo.svg" alt="DilloBot - Security-hardened fork of OpenClaw" width="500">
+  <img src="website/logo.png" alt="DilloBot - Security-hardened fork of OpenClaw" width="500">
 </p>
 
 <p align="center">
-  <a href="https://github.com/AIDilloBot/dillobot/actions/workflows/install-smoke.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/AIDilloBot/dillobot/install-smoke.yml?branch=main&style=for-the-badge" alt="CI status"></a>
-  <a href="https://github.com/AIDilloBot/dillobot/releases"><img src="https://img.shields.io/github/v/release/AIDilloBot/dillobot?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
-  <a href="https://dillo.bot"><img src="https://img.shields.io/badge/Website-dillo.bot-blue?style=for-the-badge" alt="Website"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <strong>Security-hardened fork of <a href="https://github.com/openclaw/openclaw">OpenClaw</a></strong><br>
+  Enterprise-grade security without sacrificing power.
 </p>
-
-**DilloBot** is a security-hardened fork of [OpenClaw](https://github.com/openclaw/openclaw), the open-source personal AI assistant. DilloBot adds enterprise-grade security features while maintaining full compatibility with upstream OpenClaw.
 
 ---
 
