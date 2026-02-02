@@ -123,16 +123,16 @@ export function renderOverview(props: OverviewProps) {
     const lower = props.lastError.toLowerCase();
     if (!lower.includes("pairing required")) return null;
     return html`
-      <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
-        <div style="font-weight: 500; margin-bottom: 8px;">Device Pairing Required</div>
+      <div style="margin-top: 12px; padding: 12px; background: var(--bg-elevated); border-radius: 6px; border: 1px solid var(--border);">
+        <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-strong);">Device Pairing Required</div>
         <div class="muted" style="margin-bottom: 8px">
           Your browser needs to be paired with the gateway. Run these commands in your terminal:
         </div>
-        <div style="font-family: monospace; font-size: 12px; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
-          <div style="color: var(--text-muted);"># List pending pairing requests</div>
-          <div>dillobot devices local-list</div>
-          <div style="margin-top: 8px; color: var(--text-muted);"># Approve this browser (use the requestId from above)</div>
-          <div>dillobot devices local-approve &lt;requestId&gt;</div>
+        <div style="font-family: var(--mono); font-size: 12px; background: var(--bg-muted); padding: 10px; border-radius: 4px; margin-bottom: 8px; border: 1px solid var(--border);">
+          <div style="color: var(--muted);"># List pending pairing requests</div>
+          <div style="color: var(--accent);">dillobot devices local-list</div>
+          <div style="margin-top: 8px; color: var(--muted);"># Approve this browser (use the requestId from above)</div>
+          <div style="color: var(--accent);">dillobot devices local-approve &lt;requestId&gt;</div>
         </div>
         <div class="muted">Then refresh this page to reconnect.</div>
       </div>
