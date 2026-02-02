@@ -327,11 +327,12 @@ After any upstream sync, verify:
 29. [ ] `ui/public/dillobot-logo.svg` exists
 30. [ ] `ui/public/favicon.svg` has DilloBot armadillo (not lobster)
 31. [ ] `@anthropic-ai/claude-agent-sdk` in package.json dependencies
-32. [ ] `isClaudeCodeSdkProvider` import in `src/agents/pi-embedded-runner/run.ts`
-33. [ ] `runClaudeCodeSdkAgent` call in `src/agents/pi-embedded-runner/run.ts`
-34. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-runner.ts`
-35. [ ] `permissionMode: "bypassPermissions"` in SDK options
+32. [ ] `src/agents/claude-code-sdk-stream.ts` exists
+33. [ ] `resolveStreamFnForProvider` import in `src/agents/pi-embedded-runner/run/attempt.ts`
+34. [ ] `resolveStreamFnForProvider()` call in attempt.ts streamFn assignment
+35. [ ] `claude-code-agent` bypass in `src/agents/model-auth.ts` resolveApiKeyForProvider()
 36. [ ] `z.literal("subscription")` in `src/config/zod-schema.ts` auth mode union
+37. [ ] SDK configured with `tools: []`, `maxTurns: 1`, `persistSession: false` in claude-code-sdk-stream.ts
 
 ---
 
@@ -508,31 +509,43 @@ const pairingHint = (() => {
 
 **Files:**
 
-**`src/agents/claude-code-sdk-auth.ts`:**
+**`src/agents/claude-code-sdk-auth.ts`:** (DilloBot-only file)
 - Checks if Claude CLI is installed (`claude --version`)
 - Provides `isClaudeCodeSubscriptionAvailable()` and `getClaudeCodeAuth()`
 - Exports `runClaudeCodeCli()` for direct CLI usage
 
-**`src/agents/claude-code-sdk-runner.ts`:**
-- Imports and uses `@anthropic-ai/claude-agent-sdk`
-- `runClaudeCodeSdkAgent()` - Main SDK runner function
+**`src/agents/claude-code-sdk-runner.ts`:** (DilloBot-only file)
 - `isClaudeCodeSdkProvider()` - Checks if provider is claude-code-agent
 - `getClaudeCodeSdkProviderConfig()` - Returns provider config
-- Uses `sdk.query()` with `permissionMode: "bypassPermissions"`
 
-**`src/agents/pi-embedded-runner/run.ts`:**
-- Import at top: `import { isClaudeCodeSdkProvider, runClaudeCodeSdkAgent } from "../claude-code-sdk-runner.js";`
-- Hook after provider resolution:
+**`src/agents/claude-code-sdk-stream.ts`:** (DilloBot-only file)
+- `createClaudeCodeSdkStreamFn()` - Creates a streamFn that uses Claude SDK
+- `resolveStreamFnForProvider()` - Returns SDK streamFn for claude-code-agent, default otherwise
+- Adapts SDK streaming events to pi-ai's `AssistantMessageEventStream` format
+- Configures SDK with `tools: []`, `maxTurns: 1`, `persistSession: false` for single-turn completion
+
+**`src/agents/pi-embedded-runner/run/attempt.ts`:** (MINIMAL CHANGE - sync-safe)
+- Line ~90: Import `resolveStreamFnForProvider` from claude-code-sdk-stream.ts
+- Line ~510-511: Single function call replacing streamFn assignment:
 ```typescript
-// DILLOBOT: Check if we should use Claude Agent SDK
-if (isClaudeCodeSdkProvider(provider)) {
-  log.info(`[DilloBot] Using Claude Agent SDK for provider: ${provider}`);
-  const sdkResult = await runClaudeCodeSdkAgent({...});
-  // ... return result or throw error
+// DILLOBOT: resolveStreamFnForProvider handles Claude SDK provider detection
+activeSession.agent.streamFn = resolveStreamFnForProvider(params.provider, streamSimple);
+```
+
+**`src/agents/model-auth.ts`:** (MINIMAL CHANGE - sync-safe)
+- Early return at start of `resolveApiKeyForProvider()`:
+```typescript
+// DILLOBOT: Claude Code SDK uses subscription auth, not API keys
+if (provider === "claude-code-agent") {
+  return {
+    apiKey: "claude-code-subscription", // Marker - SDK handles auth
+    source: "claude-code-sdk:subscription",
+    mode: "token",
+  };
 }
 ```
 
-**`src/commands/auth-choice.apply.claude-code-sdk.ts`:**
+**`src/commands/auth-choice.apply.claude-code-sdk.ts`:** (DilloBot-only file)
 - Handles "claude-code-sdk" auth choice during onboarding
 - Creates subscription auth profile with marker token
 
@@ -546,18 +559,24 @@ User's `~/.openclaw/openclaw.json` should have:
 "agents": {
   "defaults": {
     "model": {
-      "provider": "claude-code-agent",
-      "id": "claude-sonnet-4-5"
+      "primary": "claude-code-agent/claude-sonnet-4-5"
     }
   }
 }
 ```
 
-**Why:** This is the core DilloBot feature - using Claude subscription without API keys.
+**Why:** This is the core DilloBot feature - using Claude subscription without API keys. The SDK integrates at the `streamFn` level so it uses OpenClaw's full infrastructure (system prompt, tools, session management).
+
+**Upstream Sync Strategy:**
+- DilloBot-only files: Safe, won't conflict
+- `attempt.ts`: 2 lines changed (import + function call) - low conflict risk
+- `model-auth.ts`: Early return at function start - low conflict risk
 
 **Verification Checklist Items (add to main checklist):**
 - 31. [ ] `@anthropic-ai/claude-agent-sdk` in package.json dependencies
-- 32. [ ] `isClaudeCodeSdkProvider` import in `src/agents/pi-embedded-runner/run.ts`
-- 33. [ ] `runClaudeCodeSdkAgent` call in `src/agents/pi-embedded-runner/run.ts`
-- 34. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-runner.ts`
-- 35. [ ] `permissionMode: "bypassPermissions"` in SDK options
+- 32. [ ] `resolveStreamFnForProvider` import in `src/agents/pi-embedded-runner/run/attempt.ts`
+- 33. [ ] `resolveStreamFnForProvider()` call in attempt.ts streamFn assignment
+- 34. [ ] `src/agents/claude-code-sdk-stream.ts` exists
+- 35. [ ] `claude-code-agent` bypass in `src/agents/model-auth.ts` resolveApiKeyForProvider()
+- 36. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-stream.ts`
+- 37. [ ] SDK configured with `tools: []`, `maxTurns: 1`, `persistSession: false`
