@@ -140,6 +140,16 @@ export async function resolveApiKeyForProvider(params: {
   const { provider, cfg, profileId, preferredProfile } = params;
   const store = params.store ?? ensureAuthProfileStore(params.agentDir);
 
+  // DILLOBOT: Claude Code SDK uses subscription auth, not API keys
+  // The SDK handles authentication internally via Claude CLI
+  if (provider === "claude-code-agent") {
+    return {
+      apiKey: "claude-code-subscription", // Marker - not used, SDK handles auth
+      source: "claude-code-sdk:subscription",
+      mode: "token",
+    };
+  }
+
   if (profileId) {
     const resolved = await resolveApiKeyForProfile({
       cfg,
