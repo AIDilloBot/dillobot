@@ -32,10 +32,8 @@ type SdkToolsConfig = { type: "preset"; preset: "claude_code" } | string[];
 /**
  * Determine SDK tools configuration based on context.
  *
- * DILLOBOT: Use preset tools to enable Claude to output proper tool_use blocks.
- * With maxTurns: 1, the SDK should return after tool_use output without executing.
- *
- * Debugging: Testing preset to see what the SDK returns.
+ * DILLOBOT: Use preset tools so the SDK can execute Claude Code tools internally.
+ * With maxTurns: 100, the SDK handles the full agentic loop until Claude finishes.
  */
 function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
   if (tools && tools.length > 0) {
@@ -273,18 +271,14 @@ async function processSdkQuery(
   let currentText = "";
 
   try {
-    // Configure the SDK for single-turn completion
-    // - Pass tools config so Claude outputs proper tool_use blocks (pi-agent-core executes them)
-    // - maxTurns: 1 (single completion, pi-agent-core handles the agentic loop)
+    // Configure the SDK for full agentic loop
+    // - Pass tools config so Claude can use Claude Code tools
+    // - maxTurns: 100 (SDK handles full loop until Claude finishes)
     // - persistSession: false (OpenClaw manages sessions)
     //
-    // DILLOBOT: We pass tools config to the SDK so Claude can output proper tool_use blocks.
-    // Without tools, Claude outputs text-format tool syntax like "tool:exec" which
-    // pi-agent-core cannot parse. With preset tools, Claude outputs structured tool_use
-    // blocks that pi-agent-core intercepts and executes.
-    //
-    // With maxTurns: 1, the SDK returns control after Claude outputs tool_use blocks,
-    // allowing pi-agent-core to execute the tools using OpenClaw's tool implementations.
+    // DILLOBOT: The SDK handles the complete agentic loop including tool execution.
+    // With preset tools, Claude outputs tool_use blocks which the SDK executes
+    // internally using Claude Code's tool implementations.
     const toolsLabel = Array.isArray(toolsConfig)
       ? `${toolsConfig.length} tool names: [${toolsConfig.slice(0, 5).join(", ")}${toolsConfig.length > 5 ? "..." : ""}]`
       : "preset (unused)";
@@ -295,13 +289,9 @@ async function processSdkQuery(
       options: {
         abortController,
         model: model.id,
-        // DILLOBOT: Pass tools config to enable proper tool_use block output
-        // When tools are needed, use preset so Claude outputs tool_use blocks
-        // pi-agent-core will intercept and execute these tool calls
+        // DILLOBOT: Use preset tools so SDK can execute Claude Code tools internally
         tools: toolsConfig,
         // Let Claude work until done - no artificial turn limit
-        // The SDK will stop when Claude finishes (stop_reason: end_turn)
-        // Set high limit as safety net against infinite loops
         maxTurns: 100,
         // Don't persist to SDK session files - OpenClaw manages sessions
         persistSession: false,
@@ -310,7 +300,6 @@ async function processSdkQuery(
         // Include partial messages for streaming
         includePartialMessages: true,
         // Bypass permissions since we're non-interactive
-        // OpenClaw handles permissions at a higher level
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
       },
