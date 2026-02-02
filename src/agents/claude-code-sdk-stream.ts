@@ -455,21 +455,31 @@ async function processSdkQuery(
             }
             isInToolExecution = false; // We're back to receiving text
           } else if (streamEvent.event.content_block?.type === "tool_use") {
-            // Tool execution starting - emit typing indicator event
+            // Tool execution starting - flush current text to channel before tools run
             isInToolExecution = true;
-            // Emit a custom event that downstream can use for typing indicators
-            // Using text_delta with a status message
-            if (currentTextIndex >= 0 && textStartEmitted) {
-              const statusMsg = "\n\n_Working..._\n\n";
-              stream.push({
-                type: "text_delta",
-                contentIndex: currentTextIndex,
-                delta: statusMsg,
-                partial: partialMessage,
-              });
-              currentText += statusMsg;
-              lastEmittedLength = currentText.length;
-              (partialMessage.content[currentTextIndex] as TextContent).text = currentText;
+
+            // Emit text_end to flush current content to the messaging channel
+            // This ensures user sees "Let me check..." BEFORE tool execution
+            if (currentTextIndex >= 0 && textStartEmitted && currentText.trim()) {
+              const cleanedForFlush = stripToolSyntaxLight(currentText).trim();
+              if (cleanedForFlush) {
+                // Update partial message with current clean text
+                (partialMessage.content[currentTextIndex] as TextContent).text = cleanedForFlush;
+
+                // Emit text_end to trigger onBlockReply and send to channel
+                stream.push({
+                  type: "text_end",
+                  contentIndex: currentTextIndex,
+                  content: cleanedForFlush,
+                  partial: partialMessage,
+                });
+
+                // Reset for next text block (after tool execution)
+                currentTextIndex = -1;
+                currentText = "";
+                lastEmittedLength = 0;
+                textStartEmitted = false;
+              }
             }
           }
         }

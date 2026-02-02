@@ -859,3 +859,65 @@ function stripToolSyntaxLight(text: string): string {
 - Check `lastEmittedLength` tracks what's been sent to user
 - Check `stripToolSyntaxLight()` function exists for real-time stripping
 - Check "_Working..._" status emitted when tool_use block starts
+
+---
+
+### 21. Immediate Block Reply Delivery (Coalescer Flush on text_end)
+
+**Purpose:** Ensure block replies are delivered immediately when `text_end` is emitted, instead of waiting for the coalescer's idle timeout.
+
+**File:** `src/agents/pi-embedded-subscribe.handlers.messages.ts`
+
+**Problem:**
+When Claude Code SDK emits `text_end` before tool execution:
+1. The event triggers `onBlockReply` which enqueues payload to the pipeline
+2. If coalescing is enabled, the coalescer buffers content waiting for more
+3. Coalescer only flushes after `idleMs` timeout (typically 800-2500ms)
+4. During tool execution, no new text arrives, so user sees nothing
+5. By the time coalescer flushes, the entire tool workflow may be complete
+
+**Root Cause:**
+- `text_end` drains the block chunker but NOT the coalescer
+- `tool_execution_start` events trigger coalescer flush via `onBlockReplyFlush`
+- But SDK executes tools internally - no `tool_execution_start` events are emitted
+- So coalescer never gets explicitly flushed, waits for idle timeout
+
+**Solution:**
+Call `flushBlockReplyBuffer()` and `onBlockReplyFlush()` when receiving `text_end` events:
+
+```typescript
+if (evtType === "text_end" && ctx.state.blockReplyBreak === "text_end") {
+  // ... existing chunker drain logic ...
+
+  // DILLOBOT: Also flush the coalescer to ensure messages are sent immediately
+  // This is critical for Claude Code SDK where tools execute internally -
+  // without this, the coalescer waits for idleMs timeout before sending,
+  // causing the user to see nothing until the entire tool execution completes.
+  ctx.flushBlockReplyBuffer();
+  if (ctx.params.onBlockReplyFlush) {
+    void ctx.params.onBlockReplyFlush();
+  }
+}
+```
+
+**Why this works:**
+1. SDK emits `text_end` when it detects `tool_use` content block starting
+2. This now triggers both chunker drain AND coalescer flush
+3. Content is delivered to messaging channel immediately
+4. User sees "Let me check..." before tool execution begins
+5. Tool execution happens with user already having partial response
+
+**Before this fix:**
+- User saw nothing for 30+ seconds (entire tool execution time)
+- Text was buffered in coalescer waiting for idle timeout
+- Timeout eventually fired but by then entire workflow was done
+
+**After this fix:**
+- Text is delivered immediately when `text_end` is emitted
+- User sees partial responses before tool execution starts
+- Responsive UX even during long tool workflows
+
+**Verification:**
+- Check `handleMessageUpdate` calls `flushBlockReplyBuffer()` on text_end
+- Check `handleMessageUpdate` calls `onBlockReplyFlush()` on text_end
+- Check both calls are inside the `text_end` condition block

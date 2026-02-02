@@ -306,6 +306,22 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: Coalescer flush on text_end for immediate delivery
+# Without this, messages wait for coalescer idle timeout before sending
+if grep -q "flushBlockReplyBuffer" src/agents/pi-embedded-subscribe.handlers.messages.ts 2>/dev/null; then
+    echo "✅ flushBlockReplyBuffer called in message handlers"
+else
+    echo "⚠️  WARNING: flushBlockReplyBuffer not found - messages may be delayed"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "onBlockReplyFlush" src/agents/pi-embedded-subscribe.handlers.messages.ts 2>/dev/null; then
+    echo "✅ onBlockReplyFlush called in message handlers"
+else
+    echo "⚠️  WARNING: onBlockReplyFlush not in message handlers - coalescer may not flush"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check 7: Provider detection
 echo ""
 echo "Checking provider detection..."
