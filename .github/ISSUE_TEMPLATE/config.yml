@@ -1,8 +1,14 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Onboarding
-    url: https://discord.gg/clawd
-    about: New to Clawdbot? Join Discord for setup guidance from Krill in #help.
-  - name: Support
-    url: https://discord.gg/clawd
-    about: Get help from Krill and the community on Discord in #help.
+  - name: Security Vulnerability
+    url: https://github.com/AIDilloBot/dillobot/security/advisories/new
+    about: Report critical security vulnerabilities privately
+  - name: Ask a Question
+    url: https://github.com/AIDilloBot/dillobot/discussions/categories/q-a
+    about: Get help from the community in Discussions
+  - name: Share an Idea
+    url: https://github.com/AIDilloBot/dillobot/discussions/categories/ideas
+    about: Suggest features or improvements in Discussions
+  - name: General Chat
+    url: https://github.com/AIDilloBot/dillobot/discussions/categories/general
+    about: Chat with the community

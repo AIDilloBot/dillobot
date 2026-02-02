@@ -1,0 +1,61 @@
+name: Security Issue
+description: Report a security concern (non-critical only - use private reporting for vulnerabilities)
+title: "[Security]: "
+labels: ["security", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Important Security Notice
+
+        **For critical security vulnerabilities**, please use [GitHub's private vulnerability reporting](https://github.com/AIDilloBot/dillobot/security/advisories/new) instead of this public form.
+
+        This form is for:
+        - Security hardening suggestions
+        - Non-critical security improvements
+        - Questions about security features
+
+  - type: checkboxes
+    id: not-vuln
+    attributes:
+      label: Confirmation
+      options:
+        - label: This is NOT a critical security vulnerability that could be exploited
+          required: true
+        - label: I understand that critical vulnerabilities should be reported privately
+          required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of Security Issue
+      options:
+        - Security hardening suggestion
+        - Prompt injection concern
+        - Vault / encryption question
+        - Authentication concern
+        - Dependency security
+        - Documentation gap
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the security concern or suggestion
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential Impact
+      description: What could happen if this isn't addressed?
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Mitigation
+      description: How do you think this should be addressed?

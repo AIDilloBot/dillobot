@@ -801,13 +801,16 @@ Mario asking for find ~
   │ Definitely no trust 😏
 ```
 
+<!-- DILLOBOT-BRANDING -->
 ## Reporting Security Issues
 
-Found a vulnerability in OpenClaw? Please report responsibly:
+Found a vulnerability? Please report responsibly:
 
-1. Email: security@openclaw.ai
-2. Don't post publicly until fixed
-3. We'll credit you (unless you prefer anonymity)
+1. Email: [security@dillo.bot](mailto:security@dillo.bot)
+2. Or use [GitHub's private vulnerability reporting](https://github.com/AIDilloBot/dillobot/security/advisories/new)
+3. Don't post publicly until fixed
+4. We'll credit you (unless you prefer anonymity)
+<!-- /DILLOBOT-BRANDING -->
 
 ---
 

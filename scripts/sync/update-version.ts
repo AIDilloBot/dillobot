@@ -153,14 +153,18 @@ async function updateWebsite(info: VersionInfo): Promise<boolean> {
   }
 }
 
-async function copyInstallScript(): Promise<boolean> {
-  const srcPath = "install.sh";
-  const destPath = "website/install.sh";
-
+async function copyInstallScripts(): Promise<boolean> {
   try {
     await fs.access("website");
-    await fs.copyFile(srcPath, destPath);
+
+    // Copy bash installer
+    await fs.copyFile("install.sh", "website/install.sh");
     console.log("✅ website/install.sh updated");
+
+    // Copy PowerShell installer
+    await fs.copyFile("install.ps1", "website/install.ps1");
+    console.log("✅ website/install.ps1 updated");
+
     return true;
   } catch {
     return false;
@@ -217,7 +221,7 @@ async function main() {
   // Update all version references
   await updateReadme(info);
   await updateWebsite(info);
-  await copyInstallScript();
+  await copyInstallScripts();
   await updateDilloBotVersionFile(info);
 
   console.log("");

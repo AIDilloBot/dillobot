@@ -435,7 +435,7 @@ async function syncWithUpstream(): Promise<SyncResult> {
         // Update README, website, install script, and version file, then amend the merge commit
         const readmeUpdated = await updateReadmeVersion();
         const websiteUpdated = await updateWebsiteVersion();
-        const installCopied = await copyInstallScript();
+        const installCopied = await copyInstallScripts();
         const versionFileUpdated = await updateDilloBotVersionFile();
         if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated) {
           run('git commit --amend --no-edit');
@@ -478,7 +478,7 @@ async function syncWithUpstream(): Promise<SyncResult> {
         // Update README, website, install script, and version file, then amend the merge commit
         const readmeUpdated = await updateReadmeVersion();
         const websiteUpdated = await updateWebsiteVersion();
-        const installCopied = await copyInstallScript();
+        const installCopied = await copyInstallScripts();
         const versionFileUpdated = await updateDilloBotVersionFile();
         if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated) {
           run('git commit --amend --no-edit');
@@ -522,7 +522,7 @@ async function syncWithUpstream(): Promise<SyncResult> {
           // Update README, website, install script, and version file before committing
           await updateReadmeVersion();
           await updateWebsiteVersion();
-          await copyInstallScript();
+          await copyInstallScripts();
           await updateDilloBotVersionFile();
           run('git commit -m "Merge upstream OpenClaw (DilloBot auto-sync via Claude Code)"');
           console.log("\n✅ Merge successful with Claude Code conflict resolution!\n");
@@ -690,17 +690,22 @@ async function updateWebsiteVersion(): Promise<boolean> {
 }
 
 /**
- * Copy install.sh to website folder
+ * Copy install scripts to website folder
  */
-async function copyInstallScript(): Promise<boolean> {
-  const srcPath = "install.sh";
-  const destPath = "website/install.sh";
-
+async function copyInstallScripts(): Promise<boolean> {
   try {
     await fs.access("website");
-    await fs.copyFile(srcPath, destPath);
-    run(`git add ${destPath}`);
+
+    // Copy bash installer
+    await fs.copyFile("install.sh", "website/install.sh");
+    run("git add website/install.sh");
     console.log("📝 Copied install.sh to website/");
+
+    // Copy PowerShell installer
+    await fs.copyFile("install.ps1", "website/install.ps1");
+    run("git add website/install.ps1");
+    console.log("📝 Copied install.ps1 to website/");
+
     return true;
   } catch {
     return false;

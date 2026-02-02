@@ -1,72 +1,87 @@
+<!-- DILLOBOT-BRANDING - Protected from upstream sync -->
 # Security Policy
 
-If you believe you've found a security issue in OpenClaw, please report it privately.
+DilloBot is a security-hardened fork of OpenClaw. Security is our top priority.
 
-## Reporting
+## Reporting Vulnerabilities
 
-- Email: `steipete@gmail.com`
-- What to include: reproduction steps, impact assessment, and (if possible) a minimal PoC.
+**Do not** report security vulnerabilities through public GitHub issues.
 
-## Bug Bounties
+### Private Reporting
 
-OpenClaw is a labor of love. There is no bug bounty program and no budget for paid reports. Please still disclose responsibly so we can fix issues quickly.
-The best way to help the project right now is by sending PRs.
+- **Email**: [security@dillo.bot](mailto:security@dillo.bot)
+- **GitHub**: [Report a vulnerability](https://github.com/AIDilloBot/dillobot/security/advisories/new)
 
-## Out of Scope
+Please include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if any)
 
-- Public Internet Exposure
-- Using OpenClaw in ways that the docs recommend not to
-- Prompt injection attacks
+We aim to respond within 48 hours and will keep you updated on the fix progress.
 
-## Operational Guidance
+## Scope
 
-For threat model + hardening guidance (including `openclaw security audit --deep` and `--fix`), see:
+### In Scope
+- Authentication and authorization bypasses
+- Encrypted vault vulnerabilities
+- Prompt injection bypasses
+- Skill verification bypasses
+- Remote code execution
+- Data exfiltration vulnerabilities
+- Credential exposure
 
-- `https://docs.openclaw.ai/gateway/security`
+### Out of Scope
+- Issues in upstream OpenClaw (report those to OpenClaw directly)
+- Social engineering attacks
+- Physical access attacks
+- Denial of service attacks
+- Issues requiring unlikely user interaction
 
-### Web Interface Safety
+## Security Features
 
-OpenClaw's web interface is intended for local use only. Do **not** bind it to the public internet; it is not hardened for public exposure.
+DilloBot includes multiple security layers:
+
+1. **Claude Code SDK Auth** - No API keys stored locally
+2. **Encrypted Vault** - AES-256-GCM for secrets at rest
+3. **Prompt Injection Protection** - Multi-layer filtering
+4. **Skill Verification** - LLM analysis before installation
+5. **Path Traversal Protection** - Sandboxed file access
+6. **Credential Detection** - Prevents accidental exposure
+7. **External Content Isolation** - Wrapped untrusted inputs
 
 ## Runtime Requirements
 
 ### Node.js Version
 
-OpenClaw requires **Node.js 22.12.0 or later** (LTS). This version includes important security patches:
-
-- CVE-2025-59466: async_hooks DoS vulnerability
-- CVE-2026-21636: Permission model bypass vulnerability
-
-Verify your Node.js version:
+DilloBot requires **Node.js 20+** (22+ recommended). Keep Node.js updated for security patches.
 
 ```bash
-node --version  # Should be v22.12.0 or later
-```
-
-### Docker Security
-
-When running OpenClaw in Docker:
-
-1. The official image runs as a non-root user (`node`) for reduced attack surface
-2. Use `--read-only` flag when possible for additional filesystem protection
-3. Limit container capabilities with `--cap-drop=ALL`
-
-Example secure Docker run:
-
-```bash
-docker run --read-only --cap-drop=ALL \
-  -v openclaw-data:/app/data \
-  openclaw/openclaw:latest
+node --version  # Should be v20.0.0 or later
 ```
 
 ## Security Scanning
 
-This project uses `detect-secrets` for automated secret detection in CI/CD.
-See `.detect-secrets.cfg` for configuration and `.secrets.baseline` for the baseline.
-
-Run locally:
+Run the security verification:
 
 ```bash
-pip install detect-secrets==1.5.0
-detect-secrets scan --baseline .secrets.baseline
+./scripts/sync/verify-security.sh
 ```
+
+Or use the doctor command:
+
+```bash
+dillobot doctor
+```
+
+## Responsible Disclosure
+
+We follow responsible disclosure practices:
+- We will acknowledge receipt within 48 hours
+- We will provide an initial assessment within 7 days
+- We will work with you to understand and resolve the issue
+- We will credit you (if desired) when the fix is released
+
+Thank you for helping keep DilloBot secure.
+
+*Armored AI. No compromises.*
