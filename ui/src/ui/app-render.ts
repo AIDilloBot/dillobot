@@ -130,15 +130,17 @@ export function renderApp(state: AppViewState) {
           >
             <span class="nav-collapse-toggle__icon">${icons.menu}</span>
           </button>
+          <!-- DILLOBOT-BRANDING-LOGO -->
           <div class="brand">
             <div class="brand-logo">
-              <img src="https://mintcdn.com/clawhub/4rYvG-uuZrMK_URE/assets/pixel-lobster.svg?fit=max&auto=format&n=4rYvG-uuZrMK_URE&q=85&s=da2032e9eac3b5d9bfe7eb96ca6a8a26" alt="OpenClaw" />
+              <img src="/dillobot-logo.svg" alt="DilloBot" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">OPENCLAW</div>
+              <div class="brand-title">DILLOBOT</div>
               <div class="brand-sub">Gateway Dashboard</div>
             </div>
           </div>
+          <!-- /DILLOBOT-BRANDING-LOGO -->
         </div>
         <div class="topbar-status">
           <div class="pill">
@@ -176,6 +178,7 @@ export function renderApp(state: AppViewState) {
             </div>
           `;
         })}
+        <!-- DILLOBOT-BRANDING-LINKS -->
         <div class="nav-group nav-group--links">
           <div class="nav-label nav-label--static">
             <span class="nav-label__text">Resources</span>
@@ -183,16 +186,17 @@ export function renderApp(state: AppViewState) {
           <div class="nav-group__items">
             <a
               class="nav-item nav-item--external"
-              href="https://docs.openclaw.ai"
+              href="https://dillobot.ai"
               target="_blank"
               rel="noreferrer"
-              title="Docs (opens in new tab)"
+              title="DilloBot Website (opens in new tab)"
             >
               <span class="nav-item__icon" aria-hidden="true">${icons.book}</span>
               <span class="nav-item__text">Docs</span>
             </a>
           </div>
         </div>
+        <!-- /DILLOBOT-BRANDING-LINKS -->
       </aside>
       <main class="content ${isChat ? "content--chat" : ""}">
         <section class="content-header">

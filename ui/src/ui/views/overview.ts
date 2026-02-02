@@ -37,40 +37,44 @@ export function renderOverview(props: OverviewProps) {
     const hasPassword = Boolean(props.password.trim());
     if (!hasToken && !hasPassword) {
       return html`
+        <!-- DILLOBOT-BRANDING-DOCS -->
         <div class="muted" style="margin-top: 8px">
           This gateway requires auth. Add a token or password, then click Connect.
           <div style="margin-top: 6px">
-            <span class="mono">openclaw dashboard --no-open</span> → tokenized URL<br />
-            <span class="mono">openclaw doctor --generate-gateway-token</span> → set token
+            <span class="mono">dillobot dashboard --no-open</span> → tokenized URL<br />
+            <span class="mono">dillobot doctor --generate-gateway-token</span> → set token
           </div>
           <div style="margin-top: 6px">
             <a
               class="session-link"
-              href="https://docs.openclaw.ai/web/dashboard"
+              href="https://dillobot.ai"
               target="_blank"
               rel="noreferrer"
-              title="Control UI auth docs (opens in new tab)"
+              title="DilloBot docs (opens in new tab)"
               >Docs: Control UI auth</a
             >
           </div>
         </div>
+        <!-- /DILLOBOT-BRANDING-DOCS -->
       `;
     }
     return html`
+      <!-- DILLOBOT-BRANDING-DOCS -->
       <div class="muted" style="margin-top: 8px">
         Auth failed. Re-copy a tokenized URL with
-        <span class="mono">openclaw dashboard --no-open</span>, or update the token, then click Connect.
+        <span class="mono">dillobot dashboard --no-open</span>, or update the token, then click Connect.
         <div style="margin-top: 6px">
           <a
             class="session-link"
-            href="https://docs.openclaw.ai/web/dashboard"
+            href="https://dillobot.ai"
             target="_blank"
             rel="noreferrer"
-            title="Control UI auth docs (opens in new tab)"
+            title="DilloBot docs (opens in new tab)"
             >Docs: Control UI auth</a
           >
         </div>
       </div>
+      <!-- /DILLOBOT-BRANDING-DOCS -->
     `;
   })();
   const insecureContextHint = (() => {
@@ -82,6 +86,7 @@ export function renderOverview(props: OverviewProps) {
       return null;
     }
     return html`
+      <!-- DILLOBOT-BRANDING-DOCS -->
       <div class="muted" style="margin-top: 8px">
         This page is HTTP, so the browser blocks device identity. Use HTTPS (Tailscale Serve) or open
         <span class="mono">http://127.0.0.1:18789</span> on the gateway host.
@@ -92,23 +97,24 @@ export function renderOverview(props: OverviewProps) {
         <div style="margin-top: 6px">
           <a
             class="session-link"
-            href="https://docs.openclaw.ai/gateway/tailscale"
+            href="https://dillobot.ai"
             target="_blank"
             rel="noreferrer"
-            title="Tailscale Serve docs (opens in new tab)"
+            title="DilloBot docs (opens in new tab)"
             >Docs: Tailscale Serve</a
           >
           <span class="muted"> · </span>
           <a
             class="session-link"
-            href="https://docs.openclaw.ai/web/control-ui#insecure-http"
+            href="https://dillobot.ai"
             target="_blank"
             rel="noreferrer"
-            title="Insecure HTTP docs (opens in new tab)"
+            title="DilloBot docs (opens in new tab)"
             >Docs: Insecure HTTP</a
           >
         </div>
       </div>
+      <!-- /DILLOBOT-BRANDING-DOCS -->
     `;
   })();
   // DILLOBOT: Pairing hint for when device pairing is required

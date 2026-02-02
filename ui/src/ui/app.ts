@@ -92,8 +92,10 @@ function resolveOnboardingMode(): boolean {
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
-@customElement("openclaw-app")
+// DILLOBOT-BRANDING-ELEMENT
+@customElement("dillobot-app")
 export class OpenClawApp extends LitElement {
+// /DILLOBOT-BRANDING-ELEMENT
   @state() settings: UiSettings = loadSettings();
   @state() password = "";
   @state() tab: Tab = "chat";

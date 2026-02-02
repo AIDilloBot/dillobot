@@ -11,16 +11,28 @@ echo ""
 ERRORS=0
 WARNINGS=0
 
-# Check 1: Auto-approve disabled
-echo "Checking auto-approve status..."
-if grep -q "silent: isLocalClient" src/gateway/server/ws-connection/message-handler.ts 2>/dev/null; then
-    echo "❌ CRITICAL: Auto-approve is RE-ENABLED in message-handler.ts!"
-    echo "   Fix: Change 'silent: isLocalClient' to 'silent: false'"
+# Check 1: First-run only auto-approve
+echo "Checking first-run only auto-approve..."
+if grep -q "isLocalClient && (await isFirstRun())" src/gateway/server/ws-connection/message-handler.ts 2>/dev/null; then
+    echo "✅ First-run only auto-approve (isLocalClient && isFirstRun)"
+elif grep -q "silent: isLocalClient," src/gateway/server/ws-connection/message-handler.ts 2>/dev/null; then
+    echo "❌ CRITICAL: Unsafe auto-approve! isLocalClient without isFirstRun check"
+    echo "   Fix: Change to 'silent: isLocalClient && (await isFirstRun())'"
     ERRORS=$((ERRORS + 1))
 elif grep -q "silent: false" src/gateway/server/ws-connection/message-handler.ts 2>/dev/null; then
-    echo "✅ Auto-approve disabled (silent: false)"
+    echo "⚠️  WARNING: Auto-approve completely disabled (silent: false)"
+    echo "   Expected: isLocalClient && isFirstRun for first-run bootstrap"
+    WARNINGS=$((WARNINGS + 1))
 else
     echo "❌ CRITICAL: Cannot find silent flag in message-handler.ts"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check 1b: isFirstRun function
+if grep -q "export async function isFirstRun" src/infra/device-pairing.ts 2>/dev/null; then
+    echo "✅ isFirstRun function exported from device-pairing.ts"
+else
+    echo "❌ CRITICAL: isFirstRun function missing from device-pairing.ts"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -246,6 +258,123 @@ if grep -q "control DilloBot" src/commands/dashboard.ts 2>/dev/null; then
     echo "✅ Dashboard says 'DilloBot' not 'OpenClaw'"
 else
     echo "⚠️  WARNING: Dashboard may still say 'OpenClaw'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check 12: Local-only device CLI commands
+echo ""
+echo "Checking local-only device CLI commands..."
+if grep -q "local-list" src/cli/devices-cli.ts 2>/dev/null; then
+    echo "✅ local-list command present in devices-cli.ts"
+else
+    echo "❌ CRITICAL: local-list command missing from devices-cli.ts"
+    echo "   This is required for bootstrap/recovery when not paired!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "local-approve" src/cli/devices-cli.ts 2>/dev/null; then
+    echo "✅ local-approve command present in devices-cli.ts"
+else
+    echo "❌ CRITICAL: local-approve command missing from devices-cli.ts"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "local-reject" src/cli/devices-cli.ts 2>/dev/null; then
+    echo "✅ local-reject command present in devices-cli.ts"
+else
+    echo "⚠️  WARNING: local-reject command missing from devices-cli.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "listDevicePairing" src/cli/devices-cli.ts 2>/dev/null; then
+    echo "✅ listDevicePairing import present"
+else
+    echo "❌ CRITICAL: listDevicePairing import missing"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check 13: Dashboard pairing hint
+echo ""
+echo "Checking dashboard pairing instructions..."
+if grep -q "pairingHint" ui/src/ui/views/overview.ts 2>/dev/null; then
+    echo "✅ pairingHint present in dashboard overview.ts"
+else
+    echo "⚠️  WARNING: pairingHint missing from dashboard overview.ts"
+    echo "   Users won't see pairing instructions on dashboard error"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "pairing required" ui/src/ui/views/overview.ts 2>/dev/null; then
+    echo "✅ Pairing required detection in overview.ts"
+else
+    echo "⚠️  WARNING: Pairing required detection missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "dillobot devices local-list" ui/src/ui/views/overview.ts 2>/dev/null; then
+    echo "✅ Local CLI instructions shown in pairing hint"
+else
+    echo "⚠️  WARNING: Local CLI instructions not shown to user"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check 14: Dashboard UI branding
+echo ""
+echo "Checking dashboard UI branding..."
+
+if grep -q "DilloBot Control" ui/index.html 2>/dev/null; then
+    echo "✅ Dashboard title is 'DilloBot Control'"
+else
+    echo "⚠️  WARNING: Dashboard title may still say 'OpenClaw'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "dillobot-app" ui/index.html 2>/dev/null; then
+    echo "✅ Custom element 'dillobot-app' in index.html"
+else
+    echo "⚠️  WARNING: Custom element may still be 'openclaw-app'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q '@customElement("dillobot-app")' ui/src/ui/app.ts 2>/dev/null; then
+    echo "✅ Custom element registration is 'dillobot-app'"
+else
+    echo "⚠️  WARNING: Custom element registration may still be 'openclaw-app'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "DILLOBOT" ui/src/ui/app-render.ts 2>/dev/null; then
+    echo "✅ Brand title 'DILLOBOT' in app-render.ts"
+else
+    echo "⚠️  WARNING: Brand title may still say 'OPENCLAW'"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "/dillobot-logo.svg" ui/src/ui/app-render.ts 2>/dev/null; then
+    echo "✅ DilloBot logo referenced in app-render.ts"
+else
+    echo "⚠️  WARNING: Logo may still reference OpenClaw lobster"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if [ -f "ui/public/dillobot-logo.svg" ]; then
+    echo "✅ ui/public/dillobot-logo.svg exists"
+else
+    echo "⚠️  WARNING: ui/public/dillobot-logo.svg missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "#4ade80" ui/src/styles/base.css 2>/dev/null; then
+    echo "✅ DilloBot green accent color (#4ade80) in base.css"
+else
+    echo "⚠️  WARNING: DilloBot colors may be missing from base.css"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "dillobot-app" ui/src/styles/base.css 2>/dev/null; then
+    echo "✅ Custom element style for 'dillobot-app' in base.css"
+else
+    echo "⚠️  WARNING: Custom element style may still use 'openclaw-app'"
     WARNINGS=$((WARNINGS + 1))
 fi
 

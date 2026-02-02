@@ -283,7 +283,7 @@ This entire directory is DilloBot-specific and must be preserved. It contains:
 
 After any upstream sync, verify:
 
-1. [ ] `silent: isLocalClient` in message-handler.ts (allows local bootstrapping)
+1. [ ] `silent: isLocalClient && (await isFirstRun())` in message-handler.ts (first-run only)
 2. [ ] `enforceSecurityPolicy()` called in io.ts
 3. [ ] `claude-code-agent` in ModelApi union
 4. [ ] `subscription` in ModelProviderAuthMode union
@@ -303,6 +303,16 @@ After any upstream sync, verify:
 18. [ ] DilloBot branding in dashboard.ts
 19. [ ] Process title "dillobot" in entry.ts
 20. [ ] `src/dillobot-version.ts` exists with upstream version
+21. [ ] `local-list`, `local-approve`, `local-reject` commands in devices-cli.ts
+22. [ ] `pairingHint` in ui/src/ui/views/overview.ts (dashboard pairing instructions)
+23. [ ] `isFirstRun` function exported from infra/device-pairing.ts
+24. [ ] Dashboard title "DilloBot Control" in ui/index.html
+25. [ ] Custom element `dillobot-app` in ui/index.html and ui/src/ui/app.ts
+26. [ ] DilloBot colors in ui/src/styles/base.css (green accent #4ade80, forest bg #0a120a)
+27. [ ] Brand title "DILLOBOT" in ui/src/ui/app-render.ts
+28. [ ] `/dillobot-logo.svg` referenced in ui/src/ui/app-render.ts
+29. [ ] `ui/public/dillobot-logo.svg` exists
+30. [ ] `ui/public/favicon.svg` has DilloBot armadillo (not lobster)
 
 ---
 
@@ -332,3 +342,136 @@ After any upstream sync, verify:
 - Auto-updated by sync script
 
 **Why:** Users should clearly know they're running the security-hardened DilloBot fork, not vanilla OpenClaw. The upstream version display helps them understand what base version they're on.
+
+---
+
+### 11. Local-Only Device CLI Commands
+
+**File:** `src/cli/devices-cli.ts`
+
+**Commands Added:**
+```typescript
+// List devices without gateway connection
+devices.command("local-list")
+  .description("List pending and paired devices (local files, no gateway needed)")
+
+// Approve a pending device without gateway connection
+devices.command("local-approve")
+  .description("Approve a pending device (local files, no gateway needed)")
+  .argument("<requestId>", "Pending request ID (from local-list)")
+
+// Reject a pending device without gateway connection
+devices.command("local-reject")
+  .description("Reject a pending device (local files, no gateway needed)")
+  .argument("<requestId>", "Pending request ID (from local-list)")
+```
+
+**Imports Required:**
+```typescript
+import {
+  approveDevicePairing,
+  listDevicePairing,
+  rejectDevicePairing,
+} from "../infra/device-pairing.js";
+```
+
+**Why:** These commands allow device pairing recovery when the user cannot connect to the gateway (bootstrap deadlock scenario). They work directly with local `paired.json` and `pending.json` files.
+
+**Flow:**
+1. User visits dashboard → gets "Pairing Required" error
+2. User runs `dillobot devices local-list` → sees pending request
+3. User runs `dillobot devices local-approve <requestId>` → device is paired
+4. User refreshes dashboard → connected
+
+---
+
+### 12. Dashboard Pairing Instructions
+
+**File:** `ui/src/ui/views/overview.ts`
+
+**Added Function:**
+```typescript
+// DILLOBOT: Pairing hint for when device pairing is required
+const pairingHint = (() => {
+  if (props.connected || !props.lastError) return null;
+  const lower = props.lastError.toLowerCase();
+  if (!lower.includes("pairing required")) return null;
+  return html`
+    <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
+      <div style="font-weight: 500; margin-bottom: 8px;">Device Pairing Required</div>
+      <div class="muted" style="margin-bottom: 8px">
+        Your browser needs to be paired with the gateway. Run these commands in your terminal:
+      </div>
+      <div style="font-family: monospace; font-size: 12px; ...">
+        <div style="color: var(--text-muted);"># List pending pairing requests</div>
+        <div>dillobot devices local-list</div>
+        <div style="margin-top: 8px; color: var(--text-muted);"># Approve this browser</div>
+        <div>dillobot devices local-approve &lt;requestId&gt;</div>
+      </div>
+      <div class="muted">Then refresh this page to reconnect.</div>
+    </div>
+  `;
+})();
+```
+
+**Rendered In:** Error callout section (after `authHint` and `insecureContextHint`)
+
+**Why:** When users get a "Pairing Required" error, they need clear instructions on how to approve their browser. This surfaces the local-only CLI commands directly in the UI.
+
+---
+
+### 13. Dashboard UI Branding
+
+**Purpose:** The dashboard must show DilloBot branding, colors, and logo instead of OpenClaw.
+
+**Files with `DILLOBOT-BRANDING-*` markers:**
+
+**`ui/src/styles/base.css`:**
+- All CSS variables prefixed with `/* DILLOBOT: */` comments
+- Color scheme: Forest green backgrounds (#0a120a), green accent (#4ade80), shell/gold secondary (#d4b896)
+- Custom element: `dillobot-app` instead of `openclaw-app`
+
+**`ui/index.html`:**
+- Title: "DilloBot Control" instead of "OpenClaw Control"
+- Custom element: `<dillobot-app>` instead of `<openclaw-app>`
+
+**`ui/src/ui/app.ts`:**
+- Custom element registration: `@customElement("dillobot-app")`
+
+**`ui/src/ui/app-render.ts`:**
+- Brand logo: `/dillobot-logo.svg` instead of pixel-lobster
+- Brand title: "DILLOBOT" instead of "OPENCLAW"
+- Docs link: `https://dillobot.ai` instead of `docs.openclaw.ai`
+
+**`ui/src/ui/views/overview.ts`:**
+- CLI commands: `dillobot` instead of `openclaw`
+- Docs links: `https://dillobot.ai` instead of `docs.openclaw.ai`
+
+**`ui/public/favicon.svg`:**
+- DilloBot armadillo logo with shell bands and shield accent
+
+**`ui/public/dillobot-logo.svg`:**
+- **NEW** DilloBot armadillo logo for dashboard header
+
+**Test files updated:**
+- `ui/src/ui/focus-mode.browser.test.ts`
+- `ui/src/ui/chat-markdown.browser.test.ts`
+- `ui/src/ui/navigation.browser.test.ts`
+
+**Color Palette:**
+```css
+/* Shell tones (from website) */
+--shell-light: #D4B896;
+--shell-mid: #B8956E;
+--shell-dark: #8B7355;
+
+/* Security green accent */
+--accent: #4ade80;
+--accent-hover: #86efac;
+
+/* Forest backgrounds */
+--bg: #0a120a;
+--bg-elevated: #121f12;
+```
+
+**Why:** Users must clearly see they are running DilloBot, not OpenClaw. Consistent branding across CLI and dashboard builds trust.

@@ -39,6 +39,13 @@ const SECURITY_CRITICAL_FILES = [
   "src/agents/auth-profiles/types.ts",    // SubscriptionCredential type definition
   "src/auto-reply/dispatch.ts",           // Central security integration for ALL channels
   "src/cron/isolated-agent/run.ts",       // Security for email/webhook hooks
+  "src/infra/device-pairing.ts",          // isFirstRun function for first-run only auto-approve
+  "src/cli/devices-cli.ts",               // Local-only device approval commands
+  "ui/src/ui/views/overview.ts",          // Dashboard pairing instructions + branding
+  "ui/src/ui/app-render.ts",              // Dashboard branding (logo, title, docs links)
+  "ui/src/ui/app.ts",                     // Custom element registration
+  "ui/src/styles/base.css",               // DilloBot colors and custom element styles
+  "ui/index.html",                        // Page title and custom element
 ];
 
 interface SyncResult {
@@ -288,20 +295,46 @@ Respond with a JSON object (no markdown, just raw JSON):
 async function verifySecurityPatches(): Promise<{ valid: boolean; issues: string[] }> {
   const issues: string[] = [];
 
-  // Check 1: Auto-approve disabled
+  // Check 1: First-run only auto-approve
   try {
     const messageHandler = await fs.readFile(
       "src/gateway/server/ws-connection/message-handler.ts",
       "utf-8",
     );
-    if (messageHandler.includes("silent: isLocalClient")) {
-      issues.push("CRITICAL: Auto-approve re-enabled in message-handler.ts");
-    }
-    if (!messageHandler.includes("silent: false")) {
-      issues.push("CRITICAL: silent: false missing in message-handler.ts");
+    // Check for first-run only auto-approve (isLocalClient && isFirstRun)
+    if (messageHandler.includes("isLocalClient && (await isFirstRun())")) {
+      // Good - first-run only auto-approve is in place
+    } else if (messageHandler.includes("silent: isLocalClient,") || messageHandler.includes("silent: isLocalClient ")) {
+      // Bad - unrestricted local auto-approve (VPS vulnerability)
+      issues.push("CRITICAL: Unsafe auto-approve! isLocalClient without isFirstRun check");
+    } else if (!messageHandler.includes("isFirstRun")) {
+      issues.push("WARNING: isFirstRun not found in message-handler.ts - check auto-approve logic");
     }
   } catch {
     issues.push("ERROR: Could not read message-handler.ts");
+  }
+
+  // Check 1b: isFirstRun function in device-pairing.ts
+  try {
+    const devicePairing = await fs.readFile("src/infra/device-pairing.ts", "utf-8");
+    if (!devicePairing.includes("export async function isFirstRun")) {
+      issues.push("CRITICAL: isFirstRun function missing from device-pairing.ts");
+    }
+  } catch {
+    issues.push("ERROR: Could not read device-pairing.ts");
+  }
+
+  // Check 1c: Local-only device CLI commands
+  try {
+    const devicesCli = await fs.readFile("src/cli/devices-cli.ts", "utf-8");
+    if (!devicesCli.includes("local-list")) {
+      issues.push("CRITICAL: local-list command missing from devices-cli.ts");
+    }
+    if (!devicesCli.includes("local-approve")) {
+      issues.push("CRITICAL: local-approve command missing from devices-cli.ts");
+    }
+  } catch {
+    issues.push("ERROR: Could not read devices-cli.ts");
   }
 
   // Check 2: Security policy enforcement
@@ -340,6 +373,71 @@ async function verifySecurityPatches(): Promise<{ valid: boolean; issues: string
     await fs.access("src/agents/claude-code-sdk-runner.ts");
   } catch {
     issues.push("WARNING: Claude Code SDK files missing");
+  }
+
+  // Check 6: Dashboard pairing hint
+  try {
+    const overview = await fs.readFile("ui/src/ui/views/overview.ts", "utf-8");
+    if (!overview.includes("pairingHint")) {
+      issues.push("WARNING: pairingHint missing from dashboard overview.ts");
+    }
+    if (!overview.includes("dillobot devices local-list")) {
+      issues.push("WARNING: Local CLI instructions not shown in pairing hint");
+    }
+  } catch {
+    issues.push("WARNING: Could not read ui/src/ui/views/overview.ts");
+  }
+
+  // Check 7: Dashboard UI branding
+  try {
+    const indexHtml = await fs.readFile("ui/index.html", "utf-8");
+    if (!indexHtml.includes("DilloBot Control")) {
+      issues.push("WARNING: Dashboard title may still say OpenClaw");
+    }
+    if (!indexHtml.includes("dillobot-app")) {
+      issues.push("WARNING: Custom element may still be openclaw-app in index.html");
+    }
+  } catch {
+    issues.push("WARNING: Could not read ui/index.html");
+  }
+
+  try {
+    const appTs = await fs.readFile("ui/src/ui/app.ts", "utf-8");
+    if (!appTs.includes('@customElement("dillobot-app")')) {
+      issues.push("WARNING: Custom element registration may still be openclaw-app");
+    }
+  } catch {
+    issues.push("WARNING: Could not read ui/src/ui/app.ts");
+  }
+
+  try {
+    const appRender = await fs.readFile("ui/src/ui/app-render.ts", "utf-8");
+    if (!appRender.includes("DILLOBOT")) {
+      issues.push("WARNING: Brand title may still say OPENCLAW");
+    }
+    if (!appRender.includes("/dillobot-logo.svg")) {
+      issues.push("WARNING: Logo may still reference OpenClaw lobster");
+    }
+  } catch {
+    issues.push("WARNING: Could not read ui/src/ui/app-render.ts");
+  }
+
+  try {
+    await fs.access("ui/public/dillobot-logo.svg");
+  } catch {
+    issues.push("WARNING: ui/public/dillobot-logo.svg missing");
+  }
+
+  try {
+    const baseCss = await fs.readFile("ui/src/styles/base.css", "utf-8");
+    if (!baseCss.includes("#4ade80")) {
+      issues.push("WARNING: DilloBot green accent color missing from base.css");
+    }
+    if (!baseCss.includes("dillobot-app")) {
+      issues.push("WARNING: Custom element style may still use openclaw-app");
+    }
+  } catch {
+    issues.push("WARNING: Could not read ui/src/styles/base.css");
   }
 
   return {
