@@ -46,6 +46,11 @@ const SECURITY_CRITICAL_FILES = [
   "ui/src/ui/app.ts",                     // Custom element registration
   "ui/src/styles/base.css",               // DilloBot colors and custom element styles
   "ui/index.html",                        // Page title and custom element
+  // Claude Agent SDK integration (core DilloBot feature)
+  "src/agents/claude-code-sdk-auth.ts",   // SDK authentication helpers
+  "src/agents/claude-code-sdk-runner.ts", // SDK query runner
+  "src/agents/pi-embedded-runner/run.ts", // SDK integration hook
+  "src/commands/auth-choice.apply.claude-code-sdk.ts", // SDK auth choice handler
 ];
 
 interface SyncResult {
@@ -373,6 +378,42 @@ async function verifySecurityPatches(): Promise<{ valid: boolean; issues: string
     await fs.access("src/agents/claude-code-sdk-runner.ts");
   } catch {
     issues.push("WARNING: Claude Code SDK files missing");
+  }
+
+  // Check 5b: Claude Agent SDK integration in pi-embedded-runner
+  try {
+    const runTs = await fs.readFile("src/agents/pi-embedded-runner/run.ts", "utf-8");
+    if (!runTs.includes("isClaudeCodeSdkProvider")) {
+      issues.push("CRITICAL: isClaudeCodeSdkProvider import missing from pi-embedded-runner/run.ts");
+    }
+    if (!runTs.includes("runClaudeCodeSdkAgent")) {
+      issues.push("CRITICAL: runClaudeCodeSdkAgent call missing from pi-embedded-runner/run.ts");
+    }
+  } catch {
+    issues.push("ERROR: Could not read pi-embedded-runner/run.ts");
+  }
+
+  // Check 5c: SDK query usage in runner
+  try {
+    const sdkRunner = await fs.readFile("src/agents/claude-code-sdk-runner.ts", "utf-8");
+    if (!sdkRunner.includes("sdk.query")) {
+      issues.push("WARNING: sdk.query() call missing from claude-code-sdk-runner.ts");
+    }
+    if (!sdkRunner.includes("bypassPermissions")) {
+      issues.push("WARNING: permissionMode bypassPermissions missing from SDK options");
+    }
+  } catch {
+    issues.push("WARNING: Could not read claude-code-sdk-runner.ts");
+  }
+
+  // Check 5d: Claude Agent SDK package
+  try {
+    const packageJson = await fs.readFile("package.json", "utf-8");
+    if (!packageJson.includes("@anthropic-ai/claude-agent-sdk")) {
+      issues.push("WARNING: @anthropic-ai/claude-agent-sdk missing from package.json");
+    }
+  } catch {
+    issues.push("WARNING: Could not read package.json");
   }
 
   // Check 6: Dashboard pairing hint

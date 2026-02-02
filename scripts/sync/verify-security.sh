@@ -175,6 +175,45 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check: Claude Agent SDK package
+if grep -q "@anthropic-ai/claude-agent-sdk" package.json 2>/dev/null; then
+    echo "✅ Claude Agent SDK package in dependencies"
+else
+    echo "⚠️  WARNING: @anthropic-ai/claude-agent-sdk missing from package.json"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check: SDK integration in pi-embedded-runner
+if grep -q "isClaudeCodeSdkProvider" src/agents/pi-embedded-runner/run.ts 2>/dev/null; then
+    echo "✅ isClaudeCodeSdkProvider import in run.ts"
+else
+    echo "❌ CRITICAL: isClaudeCodeSdkProvider missing from pi-embedded-runner/run.ts"
+    echo "   The Claude Agent SDK integration hook is missing!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "runClaudeCodeSdkAgent" src/agents/pi-embedded-runner/run.ts 2>/dev/null; then
+    echo "✅ runClaudeCodeSdkAgent call in run.ts"
+else
+    echo "❌ CRITICAL: runClaudeCodeSdkAgent call missing from pi-embedded-runner/run.ts"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check: SDK query usage in runner
+if grep -q "sdk.query" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
+    echo "✅ sdk.query() usage in claude-code-sdk-runner.ts"
+else
+    echo "⚠️  WARNING: sdk.query() call missing from claude-code-sdk-runner.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "bypassPermissions" src/agents/claude-code-sdk-runner.ts 2>/dev/null; then
+    echo "✅ permissionMode: bypassPermissions in SDK options"
+else
+    echo "⚠️  WARNING: bypassPermissions mode missing from SDK options"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check 7: Provider detection
 echo ""
 echo "Checking provider detection..."

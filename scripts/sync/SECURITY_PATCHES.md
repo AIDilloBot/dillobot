@@ -313,6 +313,11 @@ After any upstream sync, verify:
 28. [ ] `/dillobot-logo.svg` referenced in ui/src/ui/app-render.ts
 29. [ ] `ui/public/dillobot-logo.svg` exists
 30. [ ] `ui/public/favicon.svg` has DilloBot armadillo (not lobster)
+31. [ ] `@anthropic-ai/claude-agent-sdk` in package.json dependencies
+32. [ ] `isClaudeCodeSdkProvider` import in `src/agents/pi-embedded-runner/run.ts`
+33. [ ] `runClaudeCodeSdkAgent` call in `src/agents/pi-embedded-runner/run.ts`
+34. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-runner.ts`
+35. [ ] `permissionMode: "bypassPermissions"` in SDK options
 
 ---
 
@@ -475,3 +480,70 @@ const pairingHint = (() => {
 ```
 
 **Why:** Users must clearly see they are running DilloBot, not OpenClaw. Consistent branding across CLI and dashboard builds trust.
+
+---
+
+### 14. Claude Agent SDK Integration
+
+**Purpose:** DilloBot uses the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) to run agents using the user's Claude subscription instead of requiring API keys.
+
+**Package Required:**
+```json
+"@anthropic-ai/claude-agent-sdk": "^0.2.29"
+```
+
+**Files:**
+
+**`src/agents/claude-code-sdk-auth.ts`:**
+- Checks if Claude CLI is installed (`claude --version`)
+- Provides `isClaudeCodeSubscriptionAvailable()` and `getClaudeCodeAuth()`
+- Exports `runClaudeCodeCli()` for direct CLI usage
+
+**`src/agents/claude-code-sdk-runner.ts`:**
+- Imports and uses `@anthropic-ai/claude-agent-sdk`
+- `runClaudeCodeSdkAgent()` - Main SDK runner function
+- `isClaudeCodeSdkProvider()` - Checks if provider is claude-code-agent
+- `getClaudeCodeSdkProviderConfig()` - Returns provider config
+- Uses `sdk.query()` with `permissionMode: "bypassPermissions"`
+
+**`src/agents/pi-embedded-runner/run.ts`:**
+- Import at top: `import { isClaudeCodeSdkProvider, runClaudeCodeSdkAgent } from "../claude-code-sdk-runner.js";`
+- Hook after provider resolution:
+```typescript
+// DILLOBOT: Check if we should use Claude Agent SDK
+if (isClaudeCodeSdkProvider(provider)) {
+  log.info(`[DilloBot] Using Claude Agent SDK for provider: ${provider}`);
+  const sdkResult = await runClaudeCodeSdkAgent({...});
+  // ... return result or throw error
+}
+```
+
+**`src/commands/auth-choice.apply.claude-code-sdk.ts`:**
+- Handles "claude-code-sdk" auth choice during onboarding
+- Creates subscription auth profile with marker token
+
+**`src/agents/models-config.providers.ts`:**
+- Detects Claude Code SDK availability
+- Registers `claude-code-agent` provider when available
+
+**Config Required:**
+User's `~/.openclaw/openclaw.json` should have:
+```json
+"agents": {
+  "defaults": {
+    "model": {
+      "provider": "claude-code-agent",
+      "id": "claude-sonnet-4-5"
+    }
+  }
+}
+```
+
+**Why:** This is the core DilloBot feature - using Claude subscription without API keys.
+
+**Verification Checklist Items (add to main checklist):**
+- 31. [ ] `@anthropic-ai/claude-agent-sdk` in package.json dependencies
+- 32. [ ] `isClaudeCodeSdkProvider` import in `src/agents/pi-embedded-runner/run.ts`
+- 33. [ ] `runClaudeCodeSdkAgent` call in `src/agents/pi-embedded-runner/run.ts`
+- 34. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-runner.ts`
+- 35. [ ] `permissionMode: "bypassPermissions"` in SDK options
