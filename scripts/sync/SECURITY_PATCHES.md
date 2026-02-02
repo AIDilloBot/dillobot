@@ -617,8 +617,15 @@ User's `~/.openclaw/openclaw.json` should have:
 // Format: tool:exec\n<command>...</command>\n</tool:exec>
 /tool:exec\s*\n\s*<command>[\s\S]*?<\/command>\s*\n?\s*<\/tool:exec>/gi
 
+// Empty tool:exec blocks (no content between tags)
+// Format: tool:exec\n\n</tool:exec>
+/tool:[a-z_-]+\s*[\n\r]+\s*<\/tool:[a-z_-]+>/gi
+
 // Generic hybrid: tool:name ... </tool:name>
 /tool:[a-z_-]+\s*\n[\s\S]*?<\/tool:[a-z_-]+>/gi
+
+// Orphaned </tool:*> closing tags
+/<\/tool:[a-z_-]+>/gi
 
 // Orphaned <command>...</command> blocks
 /<command>[\s\S]*?<\/command>/gi
