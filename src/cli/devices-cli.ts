@@ -1,5 +1,10 @@
 import type { Command } from "commander";
 import { callGateway } from "../gateway/call.js";
+import {
+  approveDevicePairing,
+  listDevicePairing,
+  rejectDevicePairing,
+} from "../infra/device-pairing.js";
 import { defaultRuntime } from "../runtime.js";
 import { renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
@@ -261,4 +266,106 @@ export function registerDevicesCli(program: Command) {
         defaultRuntime.log(JSON.stringify(result, null, 2));
       }),
   );
+
+  // ==========================================================================
+  // LOCAL-ONLY COMMANDS (don't require gateway connection)
+  // These work directly with device files for bootstrap/recovery scenarios
+  // ==========================================================================
+
+  devices
+    .command("local-list")
+    .description("List pending and paired devices (local files, no gateway needed)")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { json?: boolean }) => {
+      const list = await listDevicePairing();
+      if (opts.json) {
+        defaultRuntime.log(JSON.stringify(list, null, 2));
+        return;
+      }
+      if (list.pending?.length) {
+        const tableWidth = Math.max(60, (process.stdout.columns ?? 120) - 1);
+        defaultRuntime.log(
+          `${theme.heading("Pending")} ${theme.muted(`(${list.pending.length})`)}`,
+        );
+        defaultRuntime.log(
+          renderTable({
+            width: tableWidth,
+            columns: [
+              { key: "Request", header: "Request ID", minWidth: 36 },
+              { key: "Device", header: "Device", minWidth: 16, flex: true },
+              { key: "Role", header: "Role", minWidth: 8 },
+              { key: "Age", header: "Age", minWidth: 8 },
+            ],
+            rows: list.pending.map((req) => ({
+              Request: req.requestId,
+              Device: req.displayName || req.deviceId.slice(0, 16) + "...",
+              Role: req.role ?? "",
+              Age: typeof req.ts === "number" ? `${formatAge(Date.now() - req.ts)} ago` : "",
+            })),
+          }).trimEnd(),
+        );
+        defaultRuntime.log("");
+        defaultRuntime.log(
+          theme.muted("To approve: ") +
+            theme.command("dillobot devices local-approve <requestId>"),
+        );
+      }
+      if (list.paired?.length) {
+        const tableWidth = Math.max(60, (process.stdout.columns ?? 120) - 1);
+        defaultRuntime.log(
+          `${theme.heading("Paired")} ${theme.muted(`(${list.paired.length})`)}`,
+        );
+        defaultRuntime.log(
+          renderTable({
+            width: tableWidth,
+            columns: [
+              { key: "Device", header: "Device", minWidth: 16, flex: true },
+              { key: "Roles", header: "Roles", minWidth: 12 },
+            ],
+            rows: list.paired.map((device) => ({
+              Device: device.displayName || device.deviceId.slice(0, 16) + "...",
+              Roles: device.roles?.length ? device.roles.join(", ") : "",
+            })),
+          }).trimEnd(),
+        );
+      }
+      if (!list.pending?.length && !list.paired?.length) {
+        defaultRuntime.log(theme.muted("No device pairing entries."));
+      }
+    });
+
+  devices
+    .command("local-approve")
+    .description("Approve a pending device (local files, no gateway needed)")
+    .argument("<requestId>", "Pending request ID (from local-list)")
+    .action(async (requestId: string) => {
+      const result = await approveDevicePairing(requestId.trim());
+      if (!result) {
+        defaultRuntime.error(`No pending request found with ID: ${requestId}`);
+        defaultRuntime.log(theme.muted("Run: dillobot devices local-list"));
+        defaultRuntime.exit(1);
+        return;
+      }
+      defaultRuntime.log(
+        `${theme.success("Approved")} ${theme.command(result.device.displayName || result.device.deviceId)}`,
+      );
+      defaultRuntime.log(theme.muted("Refresh your browser to reconnect."));
+    });
+
+  devices
+    .command("local-reject")
+    .description("Reject a pending device (local files, no gateway needed)")
+    .argument("<requestId>", "Pending request ID (from local-list)")
+    .action(async (requestId: string) => {
+      const result = await rejectDevicePairing(requestId.trim());
+      if (!result) {
+        defaultRuntime.error(`No pending request found with ID: ${requestId}`);
+        defaultRuntime.log(theme.muted("Run: dillobot devices local-list"));
+        defaultRuntime.exit(1);
+        return;
+      }
+      defaultRuntime.log(
+        `${theme.warn("Rejected")} ${theme.command(result.deviceId)}`,
+      );
+    });
 }
