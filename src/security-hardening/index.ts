@@ -80,9 +80,10 @@ export {
 } from "./injection/injection-filter.js";
 
 // Injection protection - LLM-based semantic analysis
+// NOTE: buildInjectionAnalysisPrompt was removed - now internal to analyzer
+// The analyzer uses separate system/user prompts for security hardening
 export {
   analyzeForInjection,
-  buildInjectionAnalysisPrompt,
   formatAnalysisResults,
   canSkipAnalysis,
   DEFAULT_ANALYSIS_CONFIG,

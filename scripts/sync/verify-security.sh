@@ -842,6 +842,77 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 17: LLM Security Analysis Hardening
+echo ""
+echo "Checking LLM security analysis hardening..."
+
+# Check random boundary generation in injection-analyzer.ts
+if grep -q "generateSecureBoundary\|randomBytes" src/security-hardening/injection/injection-analyzer.ts 2>/dev/null; then
+    echo "✅ Random boundary generation in injection-analyzer.ts"
+else
+    echo "❌ CRITICAL: Random boundaries missing from injection-analyzer.ts!"
+    echo "   Security analysis vulnerable to delimiter escape attacks!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check random boundary generation in skill-inspector.ts
+if grep -q "generateSecureBoundary\|randomBytes" src/security-hardening/skills/skill-inspector.ts 2>/dev/null; then
+    echo "✅ Random boundary generation in skill-inspector.ts"
+else
+    echo "❌ CRITICAL: Random boundaries missing from skill-inspector.ts!"
+    echo "   Skill inspection vulnerable to delimiter escape attacks!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check delimiter escaping in injection-analyzer.ts
+if grep -q "escapeContentForAnalysis" src/security-hardening/injection/injection-analyzer.ts 2>/dev/null; then
+    echo "✅ Delimiter escaping in injection-analyzer.ts"
+else
+    echo "❌ CRITICAL: Delimiter escaping missing from injection-analyzer.ts!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check delimiter escaping in skill-inspector.ts
+if grep -q "escapeSkillContent" src/security-hardening/skills/skill-inspector.ts 2>/dev/null; then
+    echo "✅ Delimiter escaping in skill-inspector.ts"
+else
+    echo "❌ CRITICAL: Delimiter escaping missing from skill-inspector.ts!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check system/user role separation in LLM provider interface
+if grep -q "systemPrompt.*userContent\|complete(systemPrompt" src/security-hardening/injection/injection-analyzer.ts 2>/dev/null; then
+    echo "✅ System/user role separation in InjectionLLMProvider"
+else
+    echo "❌ CRITICAL: System/user separation missing - injection analysis vulnerable!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check --no-tools in Claude CLI security provider
+if grep -q '"\-\-no-tools"\|--no-tools' src/security-hardening/injection/llm-security-provider.ts 2>/dev/null; then
+    echo "✅ --no-tools flag in Claude CLI security provider"
+else
+    echo "❌ CRITICAL: --no-tools missing from Claude CLI security provider!"
+    echo "   Security analysis may allow tool execution!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check tool_choice: "none" in OpenAI security provider
+if grep -q 'tool_choice.*none\|"tool_choice"' src/security-hardening/injection/llm-security-provider.ts 2>/dev/null; then
+    echo "✅ tool_choice: none in OpenAI security provider"
+else
+    echo "⚠️  WARNING: tool_choice: none may be missing from OpenAI security provider"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check strict JSON parsing (balanced braces)
+if grep -q "depth.*=.*0\|balanced.*brace\|remaining\[j\].*{" src/security-hardening/injection/injection-analyzer.ts 2>/dev/null; then
+    echo "✅ Strict JSON parsing in injection-analyzer.ts"
+else
+    echo "⚠️  WARNING: Strict JSON parsing may be missing from injection-analyzer.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Check vault key prefixes for channels
 if grep -q "telegramToken\|discordToken\|slackToken" src/security-hardening/vault/vault.ts 2>/dev/null; then
     echo "✅ Channel token prefixes defined in vault.ts"

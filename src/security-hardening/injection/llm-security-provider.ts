@@ -7,6 +7,11 @@
  *
  * This runs OUT-OF-BAND from the main agent flow - only the content
  * is analyzed, not the full context/history/tools.
+ *
+ * SECURITY HARDENING:
+ * - Tools are explicitly disabled on all providers
+ * - System role is used for analysis instructions (separate from user content)
+ * - This prevents prompt injection in the content from hijacking the analysis
  */
 
 import { spawn } from "node:child_process";
@@ -27,13 +32,21 @@ export function isClaudeAgentSdkProvider(provider: string): boolean {
 
 /**
  * Create an LLM provider that uses Claude Code CLI for security analysis.
- * Uses `claude -p` (print mode, no tools) for clean analysis.
+ * Uses `claude -p` (print mode) with `--no-tools` for secure analysis.
+ *
+ * SECURITY: --no-tools explicitly disables all tool execution
  */
 export function createClaudeCliSecurityProvider(): InjectionLLMProvider {
   return {
-    async complete(prompt: string): Promise<string> {
+    async complete(systemPrompt: string, userContent: string): Promise<string> {
       return new Promise((resolve, reject) => {
-        const proc = spawn("claude", ["-p", prompt], {
+        // Combine system and user content for CLI (CLI doesn't support separate system prompt)
+        // The system prompt contains hardened instructions that resist injection
+        const fullPrompt = `${systemPrompt}\n\n---\n\nContent to analyze:\n${userContent}`;
+
+        // SECURITY: Use --no-tools to explicitly disable tool execution
+        // Use -p for print mode (non-interactive)
+        const proc = spawn("claude", ["-p", "--no-tools", fullPrompt], {
           stdio: ["pipe", "pipe", "pipe"],
           timeout: 30000, // 30 second timeout for security analysis
         });
@@ -81,6 +94,10 @@ export interface GenericLLMProviderOptions {
 
 /**
  * Create an LLM provider using the Anthropic API directly.
+ *
+ * SECURITY:
+ * - Uses system role for analysis instructions (not injectable by user content)
+ * - Does not pass tools array (tools disabled by default)
  */
 export function createAnthropicSecurityProvider(options: {
   apiKey: string;
@@ -89,7 +106,7 @@ export function createAnthropicSecurityProvider(options: {
   const model = options.model || "claude-sonnet-4-20250514";
 
   return {
-    async complete(prompt: string): Promise<string> {
+    async complete(systemPrompt: string, userContent: string): Promise<string> {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -100,7 +117,12 @@ export function createAnthropicSecurityProvider(options: {
         body: JSON.stringify({
           model,
           max_tokens: 1024,
-          messages: [{ role: "user", content: prompt }],
+          // SECURITY: System prompt in system role - cannot be overridden by user content
+          system: systemPrompt,
+          // SECURITY: User content is separate - any injection attempts stay in user role
+          messages: [{ role: "user", content: userContent }],
+          // SECURITY: Explicitly no tools - Anthropic API has no tools by default,
+          // but we don't pass the tools field at all to ensure no tool execution
         }),
       });
 
@@ -120,6 +142,10 @@ export function createAnthropicSecurityProvider(options: {
 
 /**
  * Create an LLM provider using OpenAI-compatible API.
+ *
+ * SECURITY:
+ * - Uses system role for analysis instructions
+ * - Explicitly sets tool_choice to "none" to disable any tool calling
  */
 export function createOpenAICompatibleSecurityProvider(options: {
   baseUrl: string;
@@ -127,7 +153,7 @@ export function createOpenAICompatibleSecurityProvider(options: {
   model: string;
 }): InjectionLLMProvider {
   return {
-    async complete(prompt: string): Promise<string> {
+    async complete(systemPrompt: string, userContent: string): Promise<string> {
       const url = options.baseUrl.endsWith("/")
         ? `${options.baseUrl}chat/completions`
         : `${options.baseUrl}/chat/completions`;
@@ -141,7 +167,14 @@ export function createOpenAICompatibleSecurityProvider(options: {
         body: JSON.stringify({
           model: options.model,
           max_tokens: 1024,
-          messages: [{ role: "user", content: prompt }],
+          // SECURITY: System instructions in system role
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ],
+          // SECURITY: Explicitly disable tools
+          // Some OpenAI-compatible APIs support tool_choice
+          tool_choice: "none",
         }),
       });
 

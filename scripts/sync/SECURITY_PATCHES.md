@@ -410,6 +410,101 @@ if (!params.skipVerification) {
 
 ---
 
+### 28. LLM Security Analysis Hardening
+
+**Purpose:** Prevent prompt injection attacks against the security analysis LLM calls themselves. Without these protections, malicious content could manipulate the security analyzer to return false "safe" verdicts.
+
+**Files Updated:**
+
+| File | Change |
+|------|--------|
+| `src/security-hardening/injection/injection-analyzer.ts` | Random boundaries, delimiter escaping, system/user separation, strict JSON parsing |
+| `src/security-hardening/injection/llm-security-provider.ts` | System role separation, explicit tool disabling |
+| `src/security-hardening/skills/skill-inspector.ts` | Random boundaries, delimiter escaping, system/user separation, strict JSON parsing |
+
+**Security Measures Implemented:**
+
+1. **Random Boundaries (Unpredictable Delimiters)**
+   ```typescript
+   function generateSecureBoundary(): string {
+     return `SECURITY_BOUNDARY_${randomBytes(16).toString("hex")}`;
+   }
+   ```
+   Attackers cannot predict the boundary markers, preventing delimiter escape attacks.
+
+2. **Delimiter Escaping**
+   ```typescript
+   function escapeContentForAnalysis(content: string, boundary: string): string {
+     // Escape common delimiter patterns that might be used in attacks
+     escaped = escaped
+       .replace(/<<<([A-Z_]+)>>>/g, "< < <$1> > >")
+       .replace(/\[\[([A-Z_]+)\]\]/g, "[ [$1] ]")
+       .replace(/\{\{([A-Z_]+)\}\}/g, "{ {$1} }")
+       .replace(/```/g, "` ` `");
+     return escaped;
+   }
+   ```
+
+3. **System/User Role Separation**
+   ```typescript
+   // Provider interface now requires separate system and user content
+   interface InjectionLLMProvider {
+     complete(systemPrompt: string, userContent: string): Promise<string>;
+   }
+
+   // Anthropic API uses system field (cannot be overridden by user content)
+   body: JSON.stringify({
+     system: systemPrompt,  // Protected from injection
+     messages: [{ role: "user", content: userContent }],
+   })
+   ```
+
+4. **Explicit Tool Disabling**
+   ```typescript
+   // Claude CLI: --no-tools flag
+   spawn("claude", ["-p", "--no-tools", fullPrompt])
+
+   // OpenAI API: tool_choice: "none"
+   body: JSON.stringify({
+     tool_choice: "none",
+     ...
+   })
+   ```
+
+5. **Strict JSON Parsing**
+   ```typescript
+   // Only parse JSON that starts at beginning of a line
+   // Uses balanced brace matching instead of greedy regex
+   for (let i = 0; i < lines.length; i++) {
+     const line = lines[i].trim();
+     if (line.startsWith("{")) {
+       // Match balanced braces to find complete JSON object
+       let depth = 0;
+       for (let j = 0; j < remaining.length; j++) {
+         if (remaining[j] === "{") depth++;
+         if (remaining[j] === "}") {
+           depth--;
+           if (depth === 0) { end = j + 1; break; }
+         }
+       }
+     }
+   }
+   ```
+
+**Attack Vectors Mitigated:**
+
+| Attack | Mitigation |
+|--------|------------|
+| Delimiter escape (`<<<END_CONTENT>>>`) | Random unpredictable boundaries |
+| Embedded JSON response hijacking | Strict balanced-brace JSON parsing |
+| Instruction override via user content | System role separation |
+| Tool execution in security analysis | Explicit `--no-tools` / `tool_choice: "none"` |
+| Code fence escape (triple backticks) | Delimiter escaping |
+
+**Why:** The security analysis LLM is the last line of defense. If an attacker can inject prompts that manipulate the security analyzer to return "safe", the entire security system is bypassed. These hardening measures ensure the analyzer cannot be fooled by malicious content.
+
+---
+
 ## Verification Checklist
 
 After any upstream sync, verify:
@@ -1466,5 +1561,15 @@ const creds = await retrieveChannelCreds("matrix", "default");
 - 74. [ ] `skipVerification` option in SkillInstallRequest type
 - 75. [ ] `security` field in SkillInstallResult type
 - 76. [ ] skills-install.security.test.ts test file exists
+- 77. [ ] Random boundary generation in injection-analyzer.ts (generateSecureBoundary)
+- 78. [ ] Random boundary generation in skill-inspector.ts (generateSecureBoundary)
+- 79. [ ] Delimiter escaping in injection-analyzer.ts (escapeContentForAnalysis)
+- 80. [ ] Delimiter escaping in skill-inspector.ts (escapeSkillContent)
+- 81. [ ] System/user role separation in InjectionLLMProvider interface
+- 82. [ ] System/user role separation in InspectionLLMProvider interface
+- 83. [ ] `--no-tools` flag in Claude CLI security provider
+- 84. [ ] `tool_choice: "none"` in OpenAI security provider
+- 85. [ ] Strict JSON parsing (balanced braces) in injection-analyzer.ts
+- 86. [ ] Strict JSON parsing (balanced braces) in skill-inspector.ts
 
 **Why:** Messaging channel tokens are high-value credentials. A leaked bot token allows impersonation. Encrypting them at rest provides defense-in-depth alongside config file permissions.
