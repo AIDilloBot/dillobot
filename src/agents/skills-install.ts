@@ -6,6 +6,12 @@ import { pipeline } from "node:stream/promises";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveBrewExecutable } from "../infra/brew.js";
 import { runCommandWithTimeout } from "../process/exec.js";
+import {
+  verifySkillForInstallation,
+  type SkillVerificationResult,
+  type SkillVerificationConfig,
+  DEFAULT_VERIFICATION_CONFIG,
+} from "../security-hardening/index.js";
 import { CONFIG_DIR, ensureDir, resolveUserPath } from "../utils.js";
 import {
   hasBinary,
@@ -23,6 +29,10 @@ export type SkillInstallRequest = {
   installId: string;
   timeoutMs?: number;
   config?: OpenClawConfig;
+  /** Skip security verification (use with caution) */
+  skipVerification?: boolean;
+  /** Custom verification config (uses defaults if not provided) */
+  verificationConfig?: Partial<SkillVerificationConfig>;
 };
 
 export type SkillInstallResult = {
@@ -31,6 +41,14 @@ export type SkillInstallResult = {
   stdout: string;
   stderr: string;
   code: number | null;
+  /** Security verification result (if verification was performed) */
+  security?: {
+    verified: boolean;
+    riskLevel: string;
+    blocked: boolean;
+    bypassed: boolean;
+    findings: Array<{ type: string; severity: string; description: string }>;
+  };
 };
 
 function isNodeReadableStream(value: unknown): value is NodeJS.ReadableStream {
@@ -353,6 +371,45 @@ export async function installSkill(params: SkillInstallRequest): Promise<SkillIn
     };
   }
 
+  // DILLOBOT: Security verification before installation
+  let verificationResult: SkillVerificationResult | undefined;
+  if (!params.skipVerification) {
+    const verificationConfig: SkillVerificationConfig = {
+      ...DEFAULT_VERIFICATION_CONFIG,
+      ...params.verificationConfig,
+    };
+
+    verificationResult = await verifySkillForInstallation(
+      entry.skill,
+      entry.skill.filePath,
+      verificationConfig,
+    );
+
+    // Block installation if verification failed and not approved
+    if (!verificationResult.approved) {
+      return {
+        ok: false,
+        message: verificationResult.inspection.bypassAllowed
+          ? `Security check failed: ${verificationResult.inspection.summary}. Use skipVerification to bypass.`
+          : `Security check BLOCKED: ${verificationResult.inspection.summary}. Cannot bypass critical issues.`,
+        stdout: "",
+        stderr: verificationResult.message,
+        code: null,
+        security: {
+          verified: false,
+          riskLevel: verificationResult.inspection.riskLevel,
+          blocked: !verificationResult.inspection.bypassAllowed,
+          bypassed: false,
+          findings: verificationResult.inspection.findings.map((f) => ({
+            type: f.type,
+            severity: f.severity,
+            description: f.description,
+          })),
+        },
+      };
+    }
+  }
+
   const spec = findInstallSpec(entry, params.installId);
   if (!spec) {
     return {
@@ -364,7 +421,24 @@ export async function installSkill(params: SkillInstallRequest): Promise<SkillIn
     };
   }
   if (spec.kind === "download") {
-    return await installDownloadSpec({ entry, spec, timeoutMs });
+    const downloadResult = await installDownloadSpec({ entry, spec, timeoutMs });
+    // DILLOBOT: Include security verification result for downloads
+    return {
+      ...downloadResult,
+      security: verificationResult
+        ? {
+            verified: true,
+            riskLevel: verificationResult.inspection.riskLevel,
+            blocked: false,
+            bypassed: verificationResult.bypassed,
+            findings: verificationResult.inspection.findings.map((f) => ({
+              type: f.type,
+              severity: f.severity,
+              description: f.description,
+            })),
+          }
+        : undefined,
+    };
   }
 
   const prefs = resolveSkillsInstallPreferences(params.config);
@@ -483,5 +557,19 @@ export async function installSkill(params: SkillInstallRequest): Promise<SkillIn
     stdout: result.stdout.trim(),
     stderr: result.stderr.trim(),
     code: result.code,
+    // DILLOBOT: Include security verification result
+    security: verificationResult
+      ? {
+          verified: true,
+          riskLevel: verificationResult.inspection.riskLevel,
+          blocked: false,
+          bypassed: verificationResult.bypassed,
+          findings: verificationResult.inspection.findings.map((f) => ({
+            type: f.type,
+            severity: f.severity,
+            description: f.description,
+          })),
+        }
+      : undefined,
   };
 }
