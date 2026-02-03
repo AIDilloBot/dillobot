@@ -51,6 +51,27 @@ export {
   retrieveDeviceAuth,
   resetVaultInstance,
   type VaultKeyPrefix,
+  // DILLOBOT: Channel credential helpers
+  storeTelegramToken,
+  retrieveTelegramToken,
+  deleteTelegramToken,
+  storeDiscordToken,
+  retrieveDiscordToken,
+  deleteDiscordToken,
+  storeSlackTokens,
+  retrieveSlackTokens,
+  deleteSlackTokens,
+  storeWhatsAppCreds,
+  retrieveWhatsAppCreds,
+  deleteWhatsAppCreds,
+  storeChannelCreds,
+  retrieveChannelCreds,
+  deleteChannelCreds,
+  type VaultTelegramToken,
+  type VaultDiscordToken,
+  type VaultSlackTokens,
+  type VaultWhatsAppCreds,
+  type VaultChannelCreds,
 } from "./vault/vault-manager.js";
 
 // Injection protection - Quick pre-filter

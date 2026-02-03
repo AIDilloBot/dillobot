@@ -2,8 +2,12 @@ import fs from "node:fs";
 import type { OpenClawConfig } from "../config/config.js";
 import type { TelegramAccountConfig } from "../config/types.telegram.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
+import {
+  retrieveTelegramToken,
+  storeTelegramToken,
+} from "../security-hardening/vault/vault-manager.js";
 
-export type TelegramTokenSource = "env" | "tokenFile" | "config" | "none";
+export type TelegramTokenSource = "env" | "tokenFile" | "config" | "vault" | "none";
 
 export type TelegramTokenResolution = {
   token: string;
@@ -99,4 +103,46 @@ export function resolveTelegramToken(
   }
 
   return { token: "", source: "none" };
+}
+
+/**
+ * DILLOBOT: Async version that checks vault first.
+ * Priority: vault → tokenFile → config → env
+ */
+export async function resolveTelegramTokenAsync(
+  cfg?: OpenClawConfig,
+  opts: ResolveTelegramTokenOpts = {},
+): Promise<TelegramTokenResolution> {
+  const accountId = normalizeAccountId(opts.accountId);
+
+  // DILLOBOT: Check vault first
+  try {
+    const vaultToken = await retrieveTelegramToken(accountId);
+    if (vaultToken) {
+      return { token: vaultToken, source: "vault" };
+    }
+  } catch {
+    // Vault not available, continue with other sources
+  }
+
+  // Fall back to sync resolution (tokenFile, config, env)
+  const result = resolveTelegramToken(cfg, opts);
+
+  // DILLOBOT: If we found a token from other sources, store in vault for next time
+  if (result.token && result.source !== "none") {
+    storeTelegramToken(accountId, result.token).catch(() => {
+      // Best-effort vault storage
+    });
+  }
+
+  return result;
+}
+
+/**
+ * DILLOBOT: Store a Telegram token in the vault.
+ * Call this when setting up a new bot token via CLI/dashboard.
+ */
+export async function saveTelegramTokenToVault(accountId: string, token: string): Promise<void> {
+  const normalizedId = normalizeAccountId(accountId);
+  await storeTelegramToken(normalizedId, token);
 }

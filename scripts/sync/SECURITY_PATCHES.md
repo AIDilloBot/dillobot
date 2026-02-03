@@ -1248,3 +1248,112 @@ export function saveAuthProfileStore(payload: AuthProfileStore, agentDir?: strin
 - 64. [ ] Vault test files exist (vault-manager.test.ts, aes-fallback.test.ts)
 
 **Why:** Plaintext credential storage is a security risk. API keys, private keys, and tokens must be encrypted at rest. The vault integration provides defense-in-depth without requiring user passwords or complex setup.
+
+---
+
+### 26. Messaging Channel Credential Vault Integration
+
+**Purpose:** Store all messaging channel credentials (Telegram, Discord, Slack, WhatsApp, etc.) in the encrypted vault instead of plaintext config or files.
+
+**Vault Key Prefixes Added:**
+
+```typescript
+// In VAULT_KEY_PREFIXES:
+telegramToken: "telegram-token:",     // Telegram bot tokens
+discordToken: "discord-token:",       // Discord bot tokens
+slackToken: "slack-token:",           // Slack bot/app tokens
+channelCreds: "channel-creds:",       // Generic (extensions)
+```
+
+**Files Updated:**
+
+| File | Change |
+|------|--------|
+| `src/telegram/token.ts` | Added `resolveTelegramTokenAsync()`, `saveTelegramTokenToVault()` |
+| `src/discord/token.ts` | Added `resolveDiscordTokenAsync()`, `saveDiscordTokenToVault()` |
+| `src/slack/token.ts` | Added `retrieveSlackTokensFromVault()`, `saveSlackTokensToVault()` |
+| `src/slack/accounts.ts` | Added `resolveSlackAccountAsync()`, `listEnabledSlackAccountsAsync()` |
+| `src/web/auth-store.ts` | Added WhatsApp vault functions (save/restore/ensure) |
+| `src/telegram/accounts.ts` | Added "vault" to tokenSource type |
+| `src/discord/accounts.ts` | Added "vault" to tokenSource type |
+
+**Token Resolution Priority:**
+
+All channel token resolvers now check vault first:
+
+1. **Vault** (encrypted, primary)
+2. **Config** (openclaw.json)
+3. **Environment variable** (fallback)
+
+**Async Pattern:**
+
+Since existing code uses sync functions, async vault-aware versions were added:
+
+```typescript
+// Telegram example:
+export async function resolveTelegramTokenAsync(
+  cfg?: OpenClawConfig,
+  opts?: ResolveTelegramTokenOpts,
+): Promise<TelegramTokenResolution> {
+  // 1. Check vault first
+  const vaultToken = await retrieveTelegramToken(accountId);
+  if (vaultToken) return { token: vaultToken, source: "vault" };
+
+  // 2. Fall back to sync resolution
+  const result = resolveTelegramToken(cfg, opts);
+
+  // 3. Auto-save to vault for next time
+  if (result.token) {
+    storeTelegramToken(accountId, result.token).catch(() => {});
+  }
+
+  return result;
+}
+```
+
+**WhatsApp Credentials:**
+
+WhatsApp uses Baileys which stores complex session data in creds.json. Vault integration:
+
+```typescript
+// Save after successful QR login
+await saveWhatsAppCredsToVault(accountId, authDir);
+
+// Restore on startup if file missing
+await ensureWhatsAppCredsFromVault(accountId, authDir);
+
+// Manual restore
+await restoreWhatsAppCredsFromVault(accountId, authDir);
+```
+
+**Generic Channel Credentials:**
+
+For extension channels (Matrix, MS Teams, Zalo, etc.):
+
+```typescript
+// Store any channel's credentials
+await storeChannelCreds("matrix", "default", {
+  homeserver: "https://matrix.org",
+  accessToken: "token-here",
+  userId: "@bot:matrix.org",
+});
+
+// Retrieve
+const creds = await retrieveChannelCreds("matrix", "default");
+```
+
+**Tests:**
+
+- `src/security-hardening/vault/channel-credentials.test.ts` - 15 tests covering all channel types
+
+**Verification Checklist Items:**
+
+- 65. [ ] Telegram vault integration in token.ts (retrieveTelegramToken/storeTelegramToken)
+- 66. [ ] Discord vault integration in token.ts (retrieveDiscordToken/storeDiscordToken)
+- 67. [ ] Slack vault integration in token.ts (retrieveSlackTokens/storeSlackTokens)
+- 68. [ ] WhatsApp vault integration in auth-store.ts (storeWhatsAppCreds/retrieveWhatsAppCreds)
+- 69. [ ] Channel token prefixes in vault.ts (telegramToken, discordToken, slackToken)
+- 70. [ ] Channel credentials test file exists
+- 71. [ ] "vault" in tokenSource types (telegram/accounts.ts, discord/accounts.ts)
+
+**Why:** Messaging channel tokens are high-value credentials. A leaked bot token allows impersonation. Encrypting them at rest provides defense-in-depth alongside config file permissions.

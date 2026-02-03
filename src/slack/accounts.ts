@@ -2,9 +2,14 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { SlackAccountConfig } from "../config/types.js";
 import { normalizeChatType } from "../channels/chat-type.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
-import { resolveSlackAppToken, resolveSlackBotToken } from "./token.js";
+import {
+  resolveSlackAppToken,
+  resolveSlackBotToken,
+  retrieveSlackTokensFromVault,
+  saveSlackTokensToVault,
+} from "./token.js";
 
-export type SlackTokenSource = "env" | "config" | "none";
+export type SlackTokenSource = "env" | "config" | "vault" | "none";
 
 export type ResolvedSlackAccount = {
   accountId: string;
@@ -131,4 +136,73 @@ export function resolveSlackReplyToMode(
     return account.dm.replyToMode;
   }
   return account.replyToMode ?? "off";
+}
+
+// =============================================================================
+// DILLOBOT: Async Vault-Aware Account Resolution
+// =============================================================================
+
+/**
+ * DILLOBOT: Async version that checks vault first.
+ * Priority: vault → config → env
+ */
+export async function resolveSlackAccountAsync(params: {
+  cfg: OpenClawConfig;
+  accountId?: string | null;
+}): Promise<ResolvedSlackAccount> {
+  const accountId = normalizeAccountId(params.accountId);
+
+  // DILLOBOT: Check vault first
+  let vaultBot: string | undefined;
+  let vaultApp: string | undefined;
+  try {
+    const vaultTokens = await retrieveSlackTokensFromVault(accountId);
+    if (vaultTokens) {
+      vaultBot = vaultTokens.botToken;
+      vaultApp = vaultTokens.appToken;
+    }
+  } catch {
+    // Vault not available, continue with other sources
+  }
+
+  // Get sync resolution for other config
+  const syncResult = resolveSlackAccount(params);
+
+  // If vault has tokens, use them (vault takes priority)
+  if (vaultBot || vaultApp) {
+    const botTokenSource: SlackTokenSource = vaultBot ? "vault" : syncResult.botTokenSource;
+    const appTokenSource: SlackTokenSource = vaultApp ? "vault" : syncResult.appTokenSource;
+    return {
+      ...syncResult,
+      botToken: vaultBot ?? syncResult.botToken,
+      appToken: vaultApp ?? syncResult.appToken,
+      botTokenSource,
+      appTokenSource,
+    };
+  }
+
+  // If we found tokens from other sources, store in vault for next time
+  if (syncResult.botToken || syncResult.appToken) {
+    saveSlackTokensToVault(accountId, {
+      botToken: syncResult.botToken,
+      appToken: syncResult.appToken,
+    }).catch(() => {
+      // Best-effort vault storage
+    });
+  }
+
+  return syncResult;
+}
+
+/**
+ * DILLOBOT: Async version of listEnabledSlackAccounts that checks vault.
+ */
+export async function listEnabledSlackAccountsAsync(
+  cfg: OpenClawConfig,
+): Promise<ResolvedSlackAccount[]> {
+  const accountIds = listSlackAccountIds(cfg);
+  const accounts = await Promise.all(
+    accountIds.map((accountId) => resolveSlackAccountAsync({ cfg, accountId })),
+  );
+  return accounts.filter((account) => account.enabled);
 }

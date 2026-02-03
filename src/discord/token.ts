@@ -1,7 +1,11 @@
 import type { OpenClawConfig } from "../config/config.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
+import {
+  retrieveDiscordToken,
+  storeDiscordToken,
+} from "../security-hardening/vault/vault-manager.js";
 
-export type DiscordTokenSource = "env" | "config" | "none";
+export type DiscordTokenSource = "env" | "config" | "vault" | "none";
 
 export type DiscordTokenResolution = {
   token: string;
@@ -48,4 +52,47 @@ export function resolveDiscordToken(
   }
 
   return { token: "", source: "none" };
+}
+
+/**
+ * DILLOBOT: Async version that checks vault first.
+ * Priority: vault → config → env
+ */
+export async function resolveDiscordTokenAsync(
+  cfg?: OpenClawConfig,
+  opts: { accountId?: string | null; envToken?: string | null } = {},
+): Promise<DiscordTokenResolution> {
+  const accountId = normalizeAccountId(opts.accountId);
+
+  // DILLOBOT: Check vault first
+  try {
+    const vaultToken = await retrieveDiscordToken(accountId);
+    if (vaultToken) {
+      return { token: vaultToken, source: "vault" };
+    }
+  } catch {
+    // Vault not available, continue with other sources
+  }
+
+  // Fall back to sync resolution (config, env)
+  const result = resolveDiscordToken(cfg, opts);
+
+  // DILLOBOT: If we found a token from other sources, store in vault for next time
+  if (result.token && result.source !== "none") {
+    storeDiscordToken(accountId, result.token).catch(() => {
+      // Best-effort vault storage
+    });
+  }
+
+  return result;
+}
+
+/**
+ * DILLOBOT: Store a Discord token in the vault.
+ * Call this when setting up a new bot token via CLI/dashboard.
+ */
+export async function saveDiscordTokenToVault(accountId: string, token: string): Promise<void> {
+  const normalizedId = normalizeAccountId(accountId);
+  const normalizedToken = normalizeDiscordToken(token) ?? token;
+  await storeDiscordToken(normalizedId, normalizedToken);
 }

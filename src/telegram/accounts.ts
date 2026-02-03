@@ -16,7 +16,7 @@ export type ResolvedTelegramAccount = {
   enabled: boolean;
   name?: string;
   token: string;
-  tokenSource: "env" | "tokenFile" | "config" | "none";
+  tokenSource: "env" | "tokenFile" | "config" | "vault" | "none";
   config: TelegramAccountConfig;
 };
 

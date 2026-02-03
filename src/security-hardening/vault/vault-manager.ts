@@ -193,3 +193,175 @@ export async function storeDeviceAuth(deviceId: string, auth: unknown): Promise<
 export async function retrieveDeviceAuth<T>(deviceId: string): Promise<T | null> {
   return retrieveCredential<T>("deviceAuth", deviceId);
 }
+
+// =============================================================================
+// DILLOBOT: Messaging Channel Credentials
+// =============================================================================
+
+/** Telegram token stored in vault */
+export type VaultTelegramToken = {
+  token: string;
+  storedAt: number;
+};
+
+/** Discord token stored in vault */
+export type VaultDiscordToken = {
+  token: string;
+  storedAt: number;
+};
+
+/** Slack tokens stored in vault */
+export type VaultSlackTokens = {
+  botToken?: string;
+  appToken?: string;
+  userToken?: string;
+  signingSecret?: string;
+  storedAt: number;
+};
+
+/** WhatsApp credentials (Baileys creds.json content) */
+export type VaultWhatsAppCreds = {
+  creds: unknown;
+  storedAt: number;
+};
+
+/** Generic channel credentials */
+export type VaultChannelCreds = {
+  channel: string;
+  accountId: string;
+  credentials: Record<string, unknown>;
+  storedAt: number;
+};
+
+/**
+ * Store Telegram bot token in vault.
+ */
+export async function storeTelegramToken(accountId: string, token: string): Promise<void> {
+  const data: VaultTelegramToken = { token, storedAt: Date.now() };
+  await storeCredential("telegramToken", accountId, data);
+}
+
+/**
+ * Retrieve Telegram bot token from vault.
+ */
+export async function retrieveTelegramToken(accountId: string): Promise<string | null> {
+  const data = await retrieveCredential<VaultTelegramToken>("telegramToken", accountId);
+  return data?.token ?? null;
+}
+
+/**
+ * Delete Telegram bot token from vault.
+ */
+export async function deleteTelegramToken(accountId: string): Promise<boolean> {
+  return deleteCredential("telegramToken", accountId);
+}
+
+/**
+ * Store Discord bot token in vault.
+ */
+export async function storeDiscordToken(accountId: string, token: string): Promise<void> {
+  const data: VaultDiscordToken = { token, storedAt: Date.now() };
+  await storeCredential("discordToken", accountId, data);
+}
+
+/**
+ * Retrieve Discord bot token from vault.
+ */
+export async function retrieveDiscordToken(accountId: string): Promise<string | null> {
+  const data = await retrieveCredential<VaultDiscordToken>("discordToken", accountId);
+  return data?.token ?? null;
+}
+
+/**
+ * Delete Discord bot token from vault.
+ */
+export async function deleteDiscordToken(accountId: string): Promise<boolean> {
+  return deleteCredential("discordToken", accountId);
+}
+
+/**
+ * Store Slack tokens in vault.
+ */
+export async function storeSlackTokens(
+  accountId: string,
+  tokens: Omit<VaultSlackTokens, "storedAt">,
+): Promise<void> {
+  const data: VaultSlackTokens = { ...tokens, storedAt: Date.now() };
+  await storeCredential("slackToken", accountId, data);
+}
+
+/**
+ * Retrieve Slack tokens from vault.
+ */
+export async function retrieveSlackTokens(
+  accountId: string,
+): Promise<Omit<VaultSlackTokens, "storedAt"> | null> {
+  const data = await retrieveCredential<VaultSlackTokens>("slackToken", accountId);
+  if (!data) return null;
+  const { storedAt: _, ...tokens } = data;
+  return tokens;
+}
+
+/**
+ * Delete Slack tokens from vault.
+ */
+export async function deleteSlackTokens(accountId: string): Promise<boolean> {
+  return deleteCredential("slackToken", accountId);
+}
+
+/**
+ * Store WhatsApp credentials in vault.
+ */
+export async function storeWhatsAppCreds(accountId: string, creds: unknown): Promise<void> {
+  const data: VaultWhatsAppCreds = { creds, storedAt: Date.now() };
+  await storeCredential("whatsappCreds", accountId, data);
+}
+
+/**
+ * Retrieve WhatsApp credentials from vault.
+ */
+export async function retrieveWhatsAppCreds(accountId: string): Promise<unknown | null> {
+  const data = await retrieveCredential<VaultWhatsAppCreds>("whatsappCreds", accountId);
+  return data?.creds ?? null;
+}
+
+/**
+ * Delete WhatsApp credentials from vault.
+ */
+export async function deleteWhatsAppCreds(accountId: string): Promise<boolean> {
+  return deleteCredential("whatsappCreds", accountId);
+}
+
+/**
+ * Store generic channel credentials in vault.
+ * Use this for extension channels not covered by specific helpers.
+ */
+export async function storeChannelCreds(
+  channel: string,
+  accountId: string,
+  credentials: Record<string, unknown>,
+): Promise<void> {
+  const data: VaultChannelCreds = { channel, accountId, credentials, storedAt: Date.now() };
+  await storeCredential("channelCreds", `${channel}:${accountId}`, data);
+}
+
+/**
+ * Retrieve generic channel credentials from vault.
+ */
+export async function retrieveChannelCreds(
+  channel: string,
+  accountId: string,
+): Promise<Record<string, unknown> | null> {
+  const data = await retrieveCredential<VaultChannelCreds>(
+    "channelCreds",
+    `${channel}:${accountId}`,
+  );
+  return data?.credentials ?? null;
+}
+
+/**
+ * Delete generic channel credentials from vault.
+ */
+export async function deleteChannelCreds(channel: string, accountId: string): Promise<boolean> {
+  return deleteCredential("channelCreds", `${channel}:${accountId}`);
+}

@@ -212,8 +212,17 @@ export const VAULT_KEY_PREFIXES = {
   copilotToken: "copilot-token:",
   /** OpenAI API key (was stored in .env) */
   openaiKey: "openai-key:",
-  /** WhatsApp credentials */
+  /** WhatsApp credentials (Baileys creds.json) */
   whatsappCreds: "whatsapp-creds:",
+  // DILLOBOT: Messaging channel credentials
+  /** Telegram bot tokens */
+  telegramToken: "telegram-token:",
+  /** Discord bot tokens */
+  discordToken: "discord-token:",
+  /** Slack bot/app tokens */
+  slackToken: "slack-token:",
+  /** Generic channel credentials (for extensions) */
+  channelCreds: "channel-creds:",
 } as const;
 
 /**

@@ -6,8 +6,13 @@ import { formatCliCommand } from "../cli/command-format.js";
 import { resolveOAuthDir } from "../config/paths.js";
 import { info, success } from "../globals.js";
 import { getChildLogger } from "../logging.js";
-import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
+import {
+  storeWhatsAppCreds,
+  retrieveWhatsAppCreds,
+  deleteWhatsAppCreds,
+} from "../security-hardening/vault/vault-manager.js";
 import { jidToE164, resolveUserPath } from "../utils.js";
 
 export function resolveDefaultWebAuthDir(): string {
@@ -198,4 +203,114 @@ export async function pickWebChannel(
     );
   }
   return choice;
+}
+
+// =============================================================================
+// DILLOBOT: Vault-based WhatsApp Credentials
+// =============================================================================
+
+/**
+ * DILLOBOT: Store WhatsApp credentials in vault.
+ * Call this after successful QR code login to backup credentials.
+ */
+export async function saveWhatsAppCredsToVault(
+  accountId: string = DEFAULT_ACCOUNT_ID,
+  authDir: string = resolveDefaultWebAuthDir(),
+): Promise<boolean> {
+  const normalizedId = normalizeAccountId(accountId);
+  const resolvedAuthDir = resolveUserPath(authDir);
+  const credsPath = resolveWebCredsPath(resolvedAuthDir);
+
+  try {
+    const raw = await fs.readFile(credsPath, "utf-8");
+    const creds = JSON.parse(raw);
+    await storeWhatsAppCreds(normalizedId, creds);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * DILLOBOT: Restore WhatsApp credentials from vault to file.
+ * Use this to restore credentials if creds.json is missing.
+ */
+export async function restoreWhatsAppCredsFromVault(
+  accountId: string = DEFAULT_ACCOUNT_ID,
+  authDir: string = resolveDefaultWebAuthDir(),
+): Promise<boolean> {
+  const normalizedId = normalizeAccountId(accountId);
+  const resolvedAuthDir = resolveUserPath(authDir);
+  const credsPath = resolveWebCredsPath(resolvedAuthDir);
+
+  try {
+    const creds = await retrieveWhatsAppCreds(normalizedId);
+    if (!creds) {
+      return false;
+    }
+
+    // Ensure directory exists
+    await fs.mkdir(resolvedAuthDir, { recursive: true, mode: 0o700 });
+
+    // Write credentials to file
+    await fs.writeFile(credsPath, JSON.stringify(creds, null, 2), { mode: 0o600 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * DILLOBOT: Check if WhatsApp credentials exist in vault.
+ */
+export async function hasWhatsAppCredsInVault(
+  accountId: string = DEFAULT_ACCOUNT_ID,
+): Promise<boolean> {
+  const normalizedId = normalizeAccountId(accountId);
+  try {
+    const creds = await retrieveWhatsAppCreds(normalizedId);
+    return creds !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * DILLOBOT: Delete WhatsApp credentials from vault.
+ */
+export async function deleteWhatsAppCredsFromVault(
+  accountId: string = DEFAULT_ACCOUNT_ID,
+): Promise<boolean> {
+  const normalizedId = normalizeAccountId(accountId);
+  try {
+    return await deleteWhatsAppCreds(normalizedId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * DILLOBOT: Check and restore WhatsApp creds from vault if file is missing.
+ * Call this at startup before checking webAuthExists.
+ */
+export async function ensureWhatsAppCredsFromVault(
+  accountId: string = DEFAULT_ACCOUNT_ID,
+  authDir: string = resolveDefaultWebAuthDir(),
+): Promise<void> {
+  const resolvedAuthDir = resolveUserPath(authDir);
+  const hasFile = hasWebCredsSync(resolvedAuthDir);
+
+  if (!hasFile) {
+    // Try to restore from vault
+    const restored = await restoreWhatsAppCredsFromVault(accountId, authDir);
+    if (restored) {
+      const logger = getChildLogger({ module: "web-session" });
+      logger.info({ accountId }, "restored WhatsApp credentials from vault");
+    }
+  } else {
+    // File exists, ensure vault backup is current
+    saveWhatsAppCredsToVault(accountId, authDir).catch(() => {
+      // Best-effort vault backup
+    });
+  }
 }

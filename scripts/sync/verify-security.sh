@@ -741,6 +741,58 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check channel credential vault integration
+echo ""
+echo "Checking channel credential vault integration..."
+
+# Check Telegram vault integration
+if grep -q "retrieveTelegramToken\|storeTelegramToken" src/telegram/token.ts 2>/dev/null; then
+    echo "✅ Telegram token vault integration"
+else
+    echo "⚠️  WARNING: Telegram token vault integration missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check Discord vault integration
+if grep -q "retrieveDiscordToken\|storeDiscordToken" src/discord/token.ts 2>/dev/null; then
+    echo "✅ Discord token vault integration"
+else
+    echo "⚠️  WARNING: Discord token vault integration missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check Slack vault integration
+if grep -q "retrieveSlackTokens\|storeSlackTokens" src/slack/token.ts 2>/dev/null; then
+    echo "✅ Slack tokens vault integration"
+else
+    echo "⚠️  WARNING: Slack tokens vault integration missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check WhatsApp vault integration
+if grep -q "storeWhatsAppCreds\|retrieveWhatsAppCreds" src/web/auth-store.ts 2>/dev/null; then
+    echo "✅ WhatsApp credentials vault integration"
+else
+    echo "⚠️  WARNING: WhatsApp credentials vault integration missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check channel credentials test file
+if [ -f "src/security-hardening/vault/channel-credentials.test.ts" ]; then
+    echo "✅ Channel credentials test file exists"
+else
+    echo "⚠️  WARNING: Channel credentials test file missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check vault key prefixes for channels
+if grep -q "telegramToken\|discordToken\|slackToken" src/security-hardening/vault/vault.ts 2>/dev/null; then
+    echo "✅ Channel token prefixes defined in vault.ts"
+else
+    echo "⚠️  WARNING: Channel token prefixes missing from vault.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Summary
 echo ""
 echo "=================================="
