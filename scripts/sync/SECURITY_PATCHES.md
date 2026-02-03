@@ -1337,21 +1337,50 @@ export const VAULT_KEY_PREFIXES = {
 
 **Passwordless Operation:**
 
-The AES fallback vault derives its encryption key from machine identity (no user password required):
+The AES fallback vault derives its encryption key from hardware identity (no user password required):
 
 ```typescript
-private getMachineId(): string {
-  const data = `${os.hostname()}:${os.homedir()}:${os.platform()}:${os.arch()}`;
+// Primary: Hardware UUID (strongly machine-bound)
+async function getHardwareUUID(): Promise<string | null> {
+  // macOS: IOPlatformUUID via ioreg
+  // Linux: /etc/machine-id
+  // Windows: HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid
+}
+
+// Fallback: Legacy machine-derived key (weaker binding)
+function getLegacyMachineId(): string {
+  const data = `dillobot:vault:${os.hostname()}:${os.homedir()}:${os.platform()}:${os.arch()}`;
   return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+// Key derivation uses hardware UUID when available, falls back to legacy
+async function getPasswordFromEnvironment(): Promise<string> {
+  const envPassword = process.env.DILLOBOT_VAULT_PASSWORD ?? process.env.OPENCLAW_VAULT_PASSWORD;
+  if (envPassword) return envPassword;
+
+  const hwUuid = await getHardwareUUID();
+  if (hwUuid) return `dillobot:hw:${hwUuid}`;
+
+  return getLegacyMachineId();
 }
 ```
 
+**Hardware UUID Security:**
+- macOS: `IOPlatformUUID` from IOKit (persists across OS reinstalls, tied to hardware)
+- Linux: `/etc/machine-id` (stable systemd identifier, regenerated only on provisioning)
+- Windows: `MachineGuid` from registry (hardware-tied GUID)
+
 This ensures:
-- Credentials encrypted at rest
-- Tied to machine (won't decrypt elsewhere)
+- Credentials encrypted at rest with AES-256-GCM
+- Strongly tied to hardware (cannot be reconstructed from user-knowable info)
+- Automatic migration from legacy key on first access
 - No user prompts or password management
 
 Environment variables can override: `DILLOBOT_VAULT_PASSWORD` or `OPENCLAW_VAULT_PASSWORD`
+
+**Migration from Legacy Key:**
+
+On startup, the vault checks if data can be decrypted with the new hardware-based key. If not, it attempts decryption with the legacy key and re-encrypts with the new key. This is transparent and automatic.
 
 **Corruption Recovery:**
 
@@ -1439,14 +1468,16 @@ export function saveAuthProfileStore(payload: AuthProfileStore, agentDir?: strin
 
 - 54. [ ] `src/security-hardening/vault/vault-manager.ts` exists
 - 55. [ ] `src/security-hardening/vault/aes-fallback.ts` exists
-- 56. [ ] `getMachineId()` function in aes-fallback.ts (passwordless)
-- 57. [ ] `VAULT_KEY_PREFIXES` defined in vault.ts
-- 58. [ ] Auth profiles store uses vault (storeAuthProfiles/loadFromVault)
-- 59. [ ] Device identity uses vault for private keys
-- 60. [ ] `triggerVaultMigration()` called in run-main.ts
-- 61. [ ] `migration.ts` handles PLAINTEXT_PATHS migration
-- 62. [ ] `injectVaultEnvVars()` called in run-main.ts
-- 63. [ ] Vault test files exist (vault-manager.test.ts, aes-fallback.test.ts)
+- 56. [ ] `getHardwareUUID()` function in aes-fallback.ts (hardware binding)
+- 57. [ ] `getLegacyMachineId()` function in aes-fallback.ts (fallback)
+- 58. [ ] `checkAndMigrateLegacyVault()` function in aes-fallback.ts (auto-migration)
+- 59. [ ] `VAULT_KEY_PREFIXES` defined in vault.ts
+- 60. [ ] Auth profiles store uses vault (storeAuthProfiles/loadFromVault)
+- 61. [ ] Device identity uses vault for private keys
+- 62. [ ] `triggerVaultMigration()` called in run-main.ts
+- 63. [ ] `migration.ts` handles PLAINTEXT_PATHS migration
+- 64. [ ] `injectVaultEnvVars()` called in run-main.ts
+- 65. [ ] Vault test files exist (vault-manager.test.ts, aes-fallback.test.ts)
 
 **Why:** Plaintext credential storage is a security risk. API keys, private keys, and tokens must be encrypted at rest. The vault integration provides defense-in-depth without requiring user passwords or complex setup.
 

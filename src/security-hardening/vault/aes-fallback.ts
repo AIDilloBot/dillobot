@@ -3,8 +3,12 @@
  *
  * Provides AES-256-GCM encrypted file-based credential storage
  * when platform-specific keychains are not available.
+ *
+ * SECURITY: Uses hardware-based machine UUID for key derivation.
+ * This is much more secure than hostname/homedir which are easily guessable.
  */
 
+import { execSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -55,6 +59,78 @@ interface VaultFile {
 }
 
 /**
+ * Get hardware-based machine UUID.
+ *
+ * This is MUCH more secure than hostname/homedir/platform because:
+ * - It requires local access to the machine to read
+ * - It's a random UUID, not predictable
+ * - It persists across reboots but is unique per machine
+ *
+ * @returns Hardware UUID or null if not available
+ */
+async function getHardwareUUID(): Promise<string | null> {
+  const platform = os.platform();
+
+  try {
+    if (platform === "darwin") {
+      // macOS: Get IOPlatformUUID (hardware UUID)
+      // This requires local access - cannot be read remotely
+      const output = execSync("ioreg -rd1 -c IOPlatformExpertDevice", {
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+      const match = output.match(/"IOPlatformUUID"\s*=\s*"([^"]+)"/);
+      if (match?.[1]) {
+        return match[1];
+      }
+    } else if (platform === "linux") {
+      // Linux: Read machine-id file
+      // This is generated at install time and is unique per installation
+      try {
+        const machineId = await fs.readFile("/etc/machine-id", "utf-8");
+        if (machineId.trim()) {
+          return machineId.trim();
+        }
+      } catch {
+        // Try alternate location (older systems)
+        try {
+          const machineId = await fs.readFile("/var/lib/dbus/machine-id", "utf-8");
+          if (machineId.trim()) {
+            return machineId.trim();
+          }
+        } catch {
+          // Fall through
+        }
+      }
+    } else if (platform === "win32") {
+      // Windows: Read MachineGuid from registry
+      // Generated at Windows install, unique per installation
+      const output = execSync(
+        'reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid',
+        { encoding: "utf-8", timeout: 5000 },
+      );
+      const match = output.match(/MachineGuid\s+REG_SZ\s+(\S+)/);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+  } catch {
+    // Failed to get hardware UUID, will fall back
+  }
+
+  return null;
+}
+
+/**
+ * Generate legacy machine ID (for migration from old vaults).
+ * This uses hostname/homedir/platform which is less secure.
+ */
+function getLegacyMachineId(): string {
+  const data = `dillobot:vault:${os.hostname()}:${os.homedir()}:${os.platform()}:${os.arch()}`;
+  return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+/**
  * AES-256-GCM encrypted file vault implementation.
  */
 export class AesFallbackVault implements SecureVault {
@@ -64,6 +140,7 @@ export class AesFallbackVault implements SecureVault {
   private masterKey: Buffer | null = null;
   private password: string | undefined;
   private initialized = false;
+  private usingLegacyKey = false;
 
   constructor(vaultPath?: string, password?: string) {
     this.vaultPath = vaultPath ?? DEFAULT_VAULT_PATH;
@@ -72,6 +149,7 @@ export class AesFallbackVault implements SecureVault {
 
   /**
    * Initialize the vault, deriving the master key from password.
+   * Handles migration from legacy (hostname-based) to hardware UUID keys.
    */
   private async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -83,10 +161,95 @@ export class AesFallbackVault implements SecureVault {
     // Get or create salt
     const salt = await this.getOrCreateSalt();
 
-    // Derive master key from password (constructor password, env var, or machine-derived)
+    // Get password (constructor password, env var, or machine-derived)
     const password = this.password ?? (await this.getPasswordFromEnvironment());
     this.masterKey = await this.deriveKey(password, salt);
     this.initialized = true;
+
+    // Check if we need to migrate from legacy key
+    await this.checkAndMigrateLegacyVault(salt);
+  }
+
+  /**
+   * Check if vault exists with legacy key and migrate to new key.
+   */
+  private async checkAndMigrateLegacyVault(salt: Buffer): Promise<void> {
+    // Only check migration if we're using hardware-based key (not env password)
+    if (
+      this.password ||
+      process.env.DILLOBOT_VAULT_PASSWORD ||
+      process.env.OPENCLAW_VAULT_PASSWORD
+    ) {
+      return;
+    }
+
+    // Check if vault file exists
+    try {
+      await fs.access(this.vaultPath);
+    } catch {
+      // No vault file, nothing to migrate
+      return;
+    }
+
+    // Try to read vault with current key
+    const vault = await this.loadVault();
+    if (Object.keys(vault.entries).length === 0) {
+      // Empty vault, nothing to migrate
+      return;
+    }
+
+    // Try to decrypt any entry with current key
+    const firstKey = Object.keys(vault.entries)[0];
+    try {
+      this.decrypt(vault.entries[firstKey]);
+      // Decryption succeeded, current key is correct
+      return;
+    } catch {
+      // Current key failed, try legacy key
+    }
+
+    // Try legacy key
+    const legacyPassword = getLegacyMachineId();
+    const legacyKey = await this.deriveKey(legacyPassword, salt);
+    const originalKey = this.masterKey;
+    this.masterKey = legacyKey;
+
+    try {
+      this.decrypt(vault.entries[firstKey]);
+      // Legacy key worked! We need to migrate.
+      console.log("[DilloBot Vault] Migrating vault from legacy to hardware-based key...");
+      this.usingLegacyKey = true;
+
+      // Decrypt all entries with legacy key
+      const decrypted: Record<string, Buffer> = {};
+      for (const [key, entry] of Object.entries(vault.entries)) {
+        try {
+          decrypted[key] = this.decrypt(entry);
+        } catch {
+          console.warn(`[DilloBot Vault] Skipping corrupted entry during migration: ${key}`);
+        }
+      }
+
+      // Switch to new key and re-encrypt
+      this.masterKey = originalKey;
+      this.usingLegacyKey = false;
+
+      const newVault: VaultFile = { version: 1, entries: {} };
+      for (const [key, value] of Object.entries(decrypted)) {
+        newVault.entries[key] = this.encrypt(value);
+      }
+
+      await this.saveVault(newVault);
+      console.log("[DilloBot Vault] Migration complete. Vault now uses hardware-based key.");
+
+      // Zero out legacy key
+      legacyKey.fill(0);
+    } catch {
+      // Neither key works - vault may be corrupted or from different machine
+      // Restore original key and let normal error handling take over
+      this.masterKey = originalKey;
+      legacyKey.fill(0);
+    }
   }
 
   /**
@@ -115,7 +278,8 @@ export class AesFallbackVault implements SecureVault {
    * Priority:
    * 1. DILLOBOT_VAULT_PASSWORD env var (for testing/override)
    * 2. OPENCLAW_VAULT_PASSWORD env var (legacy)
-   * 3. Machine-derived key (hostname + homedir + platform hash)
+   * 3. Hardware-based machine UUID (secure)
+   * 4. Fallback to hostname-based ID (if hardware UUID unavailable)
    */
   private async getPasswordFromEnvironment(): Promise<string> {
     // Check env vars first (for testing/override)
@@ -124,21 +288,37 @@ export class AesFallbackVault implements SecureVault {
       return envPassword;
     }
 
-    // Generate machine-derived password (no user input needed)
-    // This ties the vault to this specific machine
-    return this.getMachineId();
+    // Generate machine-derived password using hardware UUID
+    return await this.getMachineId();
   }
 
   /**
    * Generate a machine-specific identifier for passwordless encryption.
    *
-   * Uses combination of hostname, homedir, platform, and arch to create
-   * a unique but deterministic key for this machine. Credentials encrypted
-   * with this key won't decrypt on a different machine.
+   * Uses hardware-based UUID which is:
+   * - Unique per machine
+   * - Requires local access to read
+   * - Not predictable/guessable like hostname
+   *
+   * Falls back to legacy method if hardware UUID not available.
    */
-  private getMachineId(): string {
-    const data = `dillobot:vault:${os.hostname()}:${os.homedir()}:${os.platform()}:${os.arch()}`;
-    return crypto.createHash("sha256").update(data).digest("hex");
+  private async getMachineId(): Promise<string> {
+    // Try to get hardware UUID first (more secure)
+    const hardwareUUID = await getHardwareUUID();
+
+    if (hardwareUUID) {
+      // Use hardware UUID - much harder for attackers to obtain
+      const data = `dillobot:vault:hw:${hardwareUUID}`;
+      return crypto.createHash("sha256").update(data).digest("hex");
+    }
+
+    // Fallback to legacy method if hardware UUID not available
+    // This shouldn't happen on normal systems, but provides a safety net
+    console.warn(
+      "[DilloBot Vault] Hardware UUID not available, using fallback machine ID. " +
+        "This is less secure - consider investigating why hardware UUID is not accessible.",
+    );
+    return getLegacyMachineId();
   }
 
   /**
@@ -391,3 +571,6 @@ export async function secureDelete(filePath: string): Promise<void> {
     }
   }
 }
+
+// Export for testing
+export { getHardwareUUID, getLegacyMachineId };

@@ -668,12 +668,52 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
-# Check passwordless machine-derived key
-if grep -q "getMachineId" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
-    echo "✅ Machine-derived key (passwordless) implemented"
+# Check hardware UUID key derivation (primary)
+if grep -q "getHardwareUUID" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ Hardware UUID key derivation implemented"
 else
-    echo "❌ CRITICAL: getMachineId function missing - vault requires password!"
+    echo "❌ CRITICAL: getHardwareUUID function missing - vault uses weak key binding!"
     ERRORS=$((ERRORS + 1))
+fi
+
+# Check legacy machine-derived key (fallback)
+if grep -q "getLegacyMachineId" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ Legacy machine-derived key fallback implemented"
+else
+    echo "⚠️  WARNING: getLegacyMachineId function missing - no fallback for legacy vaults"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check IOPlatformUUID for macOS hardware binding
+if grep -q "IOPlatformUUID" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ macOS IOPlatformUUID hardware binding"
+else
+    echo "⚠️  WARNING: IOPlatformUUID check missing - macOS hardware binding incomplete"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check /etc/machine-id for Linux hardware binding
+if grep -q "/etc/machine-id" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ Linux /etc/machine-id hardware binding"
+else
+    echo "⚠️  WARNING: /etc/machine-id check missing - Linux hardware binding incomplete"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check Windows MachineGuid for hardware binding
+if grep -q "MachineGuid" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ Windows MachineGuid hardware binding"
+else
+    echo "⚠️  WARNING: MachineGuid check missing - Windows hardware binding incomplete"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check vault key migration from legacy to hardware-based
+if grep -q "checkAndMigrateLegacyVault" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ Legacy vault migration implemented"
+else
+    echo "⚠️  WARNING: checkAndMigrateLegacyVault missing - existing vaults won't auto-migrate"
+    WARNINGS=$((WARNINGS + 1))
 fi
 
 # Check vault key prefixes
