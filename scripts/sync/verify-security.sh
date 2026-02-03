@@ -138,6 +138,15 @@ if [ -d "src/security-hardening" ]; then
         ERRORS=$((ERRORS + 1))
     fi
 
+    # Check skill installation security integration
+    if grep -q "verifySkillForInstallation" src/agents/skills-install.ts 2>/dev/null; then
+        echo "   ✅ skills-install.ts imports verifySkillForInstallation"
+    else
+        echo "   ❌ skills-install.ts missing verifySkillForInstallation import"
+        echo "      Skill security verification will NOT run during installation!"
+        ERRORS=$((ERRORS + 1))
+    fi
+
     # Check LLM-based injection analyzer
     if [ -f "src/security-hardening/injection/injection-analyzer.ts" ]; then
         echo "   ✅ injection/injection-analyzer.ts (LLM-based analysis)"
@@ -776,6 +785,60 @@ if [ -f "src/security-hardening/vault/channel-credentials.test.ts" ]; then
     echo "✅ Channel credentials test file exists"
 else
     echo "⚠️  WARNING: Channel credentials test file missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check 16: Skill Installation Security Integration
+echo ""
+echo "Checking skill installation security integration..."
+
+# Check verifySkillForInstallation import in skills-install.ts
+if grep -q "verifySkillForInstallation" src/agents/skills-install.ts 2>/dev/null; then
+    echo "✅ verifySkillForInstallation imported in skills-install.ts"
+else
+    echo "❌ CRITICAL: verifySkillForInstallation missing from skills-install.ts!"
+    echo "   Skill security verification will NOT run during installation!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check DEFAULT_VERIFICATION_CONFIG import
+if grep -q "DEFAULT_VERIFICATION_CONFIG" src/agents/skills-install.ts 2>/dev/null; then
+    echo "✅ DEFAULT_VERIFICATION_CONFIG imported in skills-install.ts"
+else
+    echo "⚠️  WARNING: DEFAULT_VERIFICATION_CONFIG may be missing from skills-install.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check skipVerification option exists
+if grep -q "skipVerification" src/agents/skills-install.ts 2>/dev/null; then
+    echo "✅ skipVerification option present in skills-install.ts"
+else
+    echo "⚠️  WARNING: skipVerification option missing - no bypass mechanism"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check security verification call
+if grep -q "await verifySkillForInstallation" src/agents/skills-install.ts 2>/dev/null; then
+    echo "✅ verifySkillForInstallation called in skills-install.ts"
+else
+    echo "❌ CRITICAL: verifySkillForInstallation not called in skills-install.ts!"
+    echo "   Skill verification exists but is not used!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check security result in return value
+if grep -q "security: {" src/agents/skills-install.ts 2>/dev/null; then
+    echo "✅ Security details included in install result"
+else
+    echo "⚠️  WARNING: Security details may not be in install result"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check skills-install.security.test.ts exists
+if [ -f "src/agents/skills-install.security.test.ts" ]; then
+    echo "✅ skills-install.security.test.ts test file exists"
+else
+    echo "⚠️  WARNING: skills-install.security.test.ts test file missing"
     WARNINGS=$((WARNINGS + 1))
 fi
 

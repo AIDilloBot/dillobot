@@ -313,6 +313,103 @@ This entire directory is DilloBot-specific and must be preserved. It contains:
 
 ---
 
+### 27. Skill Installation Security Verification
+
+**Purpose:** Block malicious skills from being installed by running security verification before installation proceeds.
+
+**File:** `src/agents/skills-install.ts`
+
+**Imports Required:**
+```typescript
+import {
+  verifySkillForInstallation,
+  type SkillVerificationResult,
+  type SkillVerificationConfig,
+  DEFAULT_VERIFICATION_CONFIG,
+} from "../security-hardening/index.js";
+```
+
+**Extended Request Type:**
+```typescript
+export type SkillInstallRequest = {
+  // ... existing fields ...
+  /** Skip security verification (use with caution) */
+  skipVerification?: boolean;
+  /** Custom verification config (merged with defaults) */
+  verificationConfig?: Partial<SkillVerificationConfig>;
+};
+```
+
+**Extended Result Type:**
+```typescript
+export type SkillInstallResult = {
+  // ... existing fields ...
+  /** Security verification details (when verification was run) */
+  security?: {
+    verified: boolean;
+    riskLevel: string;
+    blocked: boolean;
+    bypassed: boolean;
+    findings: Array<{ type: string; severity: string; description: string }>;
+  };
+};
+```
+
+**Verification Call in `installSkill()`:**
+```typescript
+// DILLOBOT: Security verification before installation
+let verificationResult: SkillVerificationResult | undefined;
+if (!params.skipVerification) {
+  const verificationConfig: SkillVerificationConfig = {
+    ...DEFAULT_VERIFICATION_CONFIG,
+    ...params.verificationConfig,
+  };
+
+  verificationResult = await verifySkillForInstallation(
+    entry.skill,
+    entry.skill.filePath,
+    verificationConfig,
+  );
+
+  // Block installation if verification failed and not approved
+  if (!verificationResult.approved) {
+    return {
+      ok: false,
+      message: verificationResult.inspection.bypassAllowed
+        ? `Security check failed: ${verificationResult.inspection.summary}. Use skipVerification to bypass.`
+        : `Security check BLOCKED: ${verificationResult.inspection.summary}. Cannot bypass critical issues.`,
+      security: {
+        verified: false,
+        riskLevel: verificationResult.inspection.riskLevel,
+        blocked: !verificationResult.inspection.bypassAllowed,
+        bypassed: false,
+        findings: verificationResult.inspection.findings,
+      },
+    };
+  }
+}
+```
+
+**Security Flow:**
+1. User requests skill installation via `installSkill()`
+2. Skill file is located and loaded
+3. **Security verification runs (unless `skipVerification: true`)**
+4. If verification fails with `bypassAllowed: false` → Installation blocked permanently
+5. If verification fails with `bypassAllowed: true` → Installation blocked, user can bypass
+6. If verification passes → Installation proceeds normally
+7. Result includes security details for logging/auditing
+
+**Risk Levels:**
+- `none` / `low` → Auto-approved, installation proceeds
+- `medium` / `high` → Blocked with bypass option (`skipVerification`)
+- `critical` → Blocked permanently, no bypass allowed
+
+**Test File:** `src/agents/skills-install.security.test.ts` — 14 tests covering all scenarios
+
+**Why:** This is the enforcement point where the skill verification system actually blocks malicious skills. Without this integration, the skill inspector code exists but never runs during installation.
+
+---
+
 ## Verification Checklist
 
 After any upstream sync, verify:
@@ -1364,5 +1461,10 @@ const creds = await retrieveChannelCreds("matrix", "default");
 - 69. [ ] Channel token prefixes in vault.ts (telegramToken, discordToken, slackToken)
 - 70. [ ] Channel credentials test file exists
 - 71. [ ] "vault" in tokenSource types (telegram/accounts.ts, discord/accounts.ts)
+- 72. [ ] `verifySkillForInstallation` import in skills-install.ts
+- 73. [ ] Security verification call before installation in skills-install.ts
+- 74. [ ] `skipVerification` option in SkillInstallRequest type
+- 75. [ ] `security` field in SkillInstallResult type
+- 76. [ ] skills-install.security.test.ts test file exists
 
 **Why:** Messaging channel tokens are high-value credentials. A leaked bot token allows impersonation. Encrypting them at rest provides defense-in-depth alongside config file permissions.
