@@ -82,39 +82,76 @@ Credentials are never stored in plaintext. All credentials use AES-256-GCM encry
 
 DilloBot uses the LLM itself to detect injection attempts semantically, rather than relying on easily-bypassed regex patterns. This catches novel attacks, encoding tricks, and sophisticated social engineering.
 
-**Layered Defense:**
+#### Critical Path: External Content Security
+
+When content arrives from external sources (email, webhooks, API), it goes through a **security gate** that runs **out-of-band** — the agent never sees blocked content:
 
 ```
-Input → Quick Pre-Filter → Source Classification → LLM Analysis → Safe Content
+External Source (Email/Webhook/API)
+         ↓
+┌─────────────────────────────────────────────────┐
+│  SECURITY GATE (Out-of-Band Analysis)           │
+│                                                 │
+│  1. Source Classification → Assign trust level  │
+│  2. Quick Pre-Filter → Block critical patterns  │
+│  3. LLM Analysis → Semantic threat detection    │
+│                                                 │
+│  Runs in isolated subprocess, no tools/context  │
+└─────────────────────────────────────────────────┘
+         ↓                    ↓
+    [BLOCKED]             [ALLOWED]
+         ↓                    ↓
+   Log + Alert         Pass CLEAN content
+   Return early        (no security wrappers)
+                             ↓
+                      Agent processes normally
 ```
 
-**Layer 1: Quick Pre-Filter (15 patterns)**
-Only catches things that are NEVER legitimate:
-- Dangerous unicode (zero-width chars, RTL overrides, tag characters)
-- Known exfil endpoints (Discord/Slack webhooks, requestbin)
-- Credential patterns (AWS keys, GitHub tokens, API keys)
+**Key Design Principles:**
+- **Out-of-band analysis:** Security runs separately — agent never sees blocked content
+- **Clean content:** Passed content has no security wrappers that pollute agent context
+- **Isolated LLM:** Security analysis uses `claude -p` (print mode) with no tools or history
 
-**Layer 2: Source Classification**
+#### Layer 1: Quick Pre-Filter
+
+Fast pattern matching for things that are **NEVER legitimate**:
+
+| Pattern | Severity | Purpose |
+|---------|----------|---------|
+| AWS keys (`AKIA...`) | CRITICAL | Credential leak detection |
+| API tokens (`sk-...`, `ghp_...`) | CRITICAL | Credential leak detection |
+| Discord/Slack webhooks | CRITICAL | Data exfiltration endpoint |
+| Bidi override characters | HIGH | Text direction attacks |
+| Zero-width characters | MEDIUM | Hidden content |
+
+Critical patterns **block immediately** without further analysis.
+
+#### Layer 2: Source Classification
+
 Different trust levels based on content origin:
 
-| Source | Trust Level | Treatment |
-|--------|-------------|-----------|
-| Direct user input | High | Quick filter only |
-| Skill content | Medium | LLM skill inspection |
-| Email content | Low | Full LLM analysis |
-| Webhook/API | Low | Full LLM analysis |
-| Web content | Low | Full LLM analysis |
+| Source | Trust Level | LLM Analysis | Example Session Key |
+|--------|-------------|--------------|---------------------|
+| Direct user input | HIGH | No | `agent:main:telegram:dm:123` |
+| Skill content | MEDIUM | Skill inspector | `skill:summarize` |
+| Email hooks | LOW | Yes | `hook:gmail:msg-abc` |
+| Webhooks | LOW | Yes | `hook:webhook:external` |
+| API calls | LOW | Yes | `api:external` |
+| Web content | LOW | Yes | `web:fetch:url` |
 
-**Layer 3: LLM Security Analysis**
-For low-trust sources, the LLM analyzes content for:
+Authenticated messaging channels (Slack, Telegram, Discord via `agent:*` session keys) are HIGH trust because they come from verified user sessions.
+
+#### Layer 3: LLM Security Analysis
+
+For **low-trust sources only**, a separate LLM analyzes content semantically:
 
 | Category | What It Detects |
 |----------|-----------------|
 | Instruction override | "ignore previous", "forget your guidelines" |
 | Role manipulation | "you are now DAN", "enable developer mode" |
-| Context escape | Fake system tags, delimiter abuse, JSON injection |
+| Context escape | Fake `</user><system>` tags, JSON injection |
 | Data exfiltration | "send this to webhook", "forward to my email" |
-| Hidden instructions | HTML comments, encoded content, invisible text |
+| Hidden instructions | HTML comments, Base64, invisible text |
 | Social engineering | False claims of authority, urgency, permissions |
 
 **Why LLM-Based?**
@@ -122,7 +159,25 @@ For low-trust sources, the LLM analyzes content for:
 - Catches **novel attacks** without pattern updates
 - Resistant to **encoding tricks** (LLM sees decoded content)
 - **Low false positives** (semantic understanding)
-- Different treatment for **trusted vs. untrusted sources**
+
+#### Critical Path: Tool Call Security
+
+**Output Filtering** prevents the agent from leaking sensitive information in responses:
+
+```
+Agent Output → Output Filter → Sanitized Response
+                    ↓
+              Redacts:
+              • System prompt content
+              • Config values & API keys
+              • Private keys & tokens
+```
+
+| Leak Type | What's Filtered |
+|-----------|-----------------|
+| System prompts | Safety instructions, persona definitions |
+| Config values | API keys, tokens, internal settings |
+| Credentials | `sk-*`, `ghp_*`, private keys, JWTs |
 
 **Protected Channels:**
 All message channels go through the security pipeline:
@@ -150,42 +205,96 @@ Output is scanned before delivery. Matches are redacted and logged.
 
 ### 5. LLM-Based Skill Inspection
 
-Skills are analyzed by your LLM before installation to detect malicious content:
+Skills are analyzed before installation to detect malicious content. This prevents supply chain attacks where a skill might contain hidden prompt injections or dangerous commands.
 
-**How it works:**
-1. When you install a skill, DilloBot sends it to your LLM for security analysis
-2. The LLM scans for prompt injections, data exfiltration, dangerous commands, etc.
-3. If issues are found, you're shown the findings and asked to approve or reject
-4. Critical issues block installation entirely (no bypass allowed)
+#### Critical Path: Skill Installation Security
 
-**Quick Pre-Check (No LLM needed):**
-Before LLM analysis, a fast pattern scan catches obvious red flags:
-- Instruction override attempts ("ignore previous instructions")
-- Jailbreak patterns ("you are now DAN")
-- Encoded payloads (base64 blocks)
-- Dangerous shell commands (`curl | sh`, `rm -rf /`)
-- Credential access patterns
+```
+Skill Import/Install Request
+         ↓
+┌─────────────────────────────────────────────────┐
+│  SKILL SECURITY GATE                            │
+│                                                 │
+│  1. Trust Check → Bundled/trusted? Skip checks  │
+│  2. Quick Pre-Filter → Block obvious red flags  │
+│  3. LLM Analysis → Semantic threat detection    │
+│                                                 │
+│  Returns: risk level + findings                 │
+└─────────────────────────────────────────────────┘
+         ↓                    ↓
+    [CRITICAL]           [SAFE/USER OK]
+         ↓                    ↓
+   Block install         Allow install
+   (no bypass)           (cache result)
+```
 
-**Risk Levels:**
-| Level | Action |
-|-------|--------|
-| None/Low | Auto-approved |
-| Medium | Warning shown, user can bypass |
-| High | Warning shown, user can bypass |
-| Critical | Blocked, no bypass allowed |
+#### Layer 1: Trust Check
 
-**Detection Categories:**
-- `prompt_injection` — Attempts to override AI behavior
-- `data_exfiltration` — Sending data to external services
-- `privilege_escalation` — Gaining elevated access
-- `obfuscated_code` — Hidden/encoded payloads
-- `credential_access` — Reading API keys, tokens
-- `system_command` — Dangerous shell commands
+Fast path for known-safe skills:
 
-**Trusted Skills:**
-- Bundled skills are trusted by default
-- Add skills to trusted list to skip inspection
+| Source | Action |
+|--------|--------|
+| Bundled skills (`node_modules`, `/dist/skills/`) | Auto-trusted |
+| Skills in `trustedSkills` config list | Auto-trusted |
+| Previously verified (cached by content hash) | Use cached result |
+
+#### Layer 2: Quick Pre-Filter
+
+Pattern matching for things that are **NEVER legitimate** in a skill:
+
+| Pattern | Flag | Example |
+|---------|------|---------|
+| Instruction override | `instruction_override` | "ignore previous instructions" |
+| Jailbreak attempts | `jailbreak_attempt` | "you are now DAN" |
+| Restriction bypass | `restriction_bypass` | "pretend you're unrestricted" |
+| Encoded payloads | `encoded_payload` | Large base64 blocks |
+| Dynamic code execution | `dynamic_code_execution` | `eval(...)` |
+| Remote code execution | `remote_code_execution` | `curl ... \| sh` |
+| Shell injection | `shell_injection` | `$(...)` with redirects |
+| Destructive commands | `destructive_command` | `rm -rf /` |
+| Sensitive file access | `sensitive_file_access` | `/etc/passwd` |
+| Credential patterns | `credential_access` | `OPENAI_API_KEY` |
+
+If red flags found, continues to LLM analysis (unless `quickCheckOnly: true`).
+
+#### Layer 3: LLM Security Analysis
+
+For untrusted skills, a separate LLM analyzes content semantically:
+
+| Category | What It Detects |
+|----------|-----------------|
+| `prompt_injection` | Instructions that override AI behavior |
+| `data_exfiltration` | Sending user data to external services |
+| `privilege_escalation` | Attempts to gain elevated access |
+| `obfuscated_code` | Base64, unicode tricks, hidden logic |
+| `external_communication` | Hidden network calls, webhooks |
+| `file_system_access` | Reading sensitive files, writing to system dirs |
+| `credential_access` | Reading API keys, tokens, passwords |
+| `system_command` | Dangerous shell commands with user input |
+| `suspicious_pattern` | Other concerning patterns |
+
+**Why LLM-Based?**
+- Understands **intent**, not just patterns
+- Catches **novel attacks** without pattern updates
+- Resistant to **encoding tricks** (LLM sees decoded content)
+- **Low false positives** (semantic understanding)
+
+#### Risk Levels and Actions
+
+| Level | Action | User Bypass |
+|-------|--------|-------------|
+| None | Auto-approved | N/A |
+| Low | Auto-approved | N/A |
+| Medium | Warning shown | ✅ Allowed |
+| High | Warning shown | ✅ Allowed |
+| Critical | **Blocked** | ❌ Not allowed |
+
+#### Trusted Skills
+
+- Bundled skills are trusted by default (`trustBundledSkills: true`)
+- Add skills to trusted list: `trustedSkills: ["skill-name"]`
 - Inspection results are cached per skill content hash
+- Clear cache with `clearVerificationCache()` if skill content changes
 
 ---
 

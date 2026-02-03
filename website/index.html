@@ -499,7 +499,7 @@
                     </div>
                 </div>
 
-                <div class="feature-card">
+                <div class="feature-card feature-large">
                     <div class="feature-icon icon-shield">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -507,13 +507,25 @@
                         </svg>
                     </div>
                     <h3>LLM Injection Protection</h3>
-                    <p>The AI itself detects prompt injection attempts semantically, catching novel attacks regex can't see.</p>
-                    <ul class="feature-list">
-                        <li><strong>Layer 1:</strong> Quick filter (15 critical patterns)</li>
-                        <li><strong>Layer 2:</strong> Source trust classification</li>
-                        <li><strong>Layer 3:</strong> LLM semantic analysis</li>
-                        <li><strong>Layer 4:</strong> Content boundary wrapping</li>
-                    </ul>
+                    <p>External content (email, webhooks, API) goes through a <strong>security gate</strong> that runs <strong>out-of-band</strong> — the agent never sees blocked content.</p>
+                    <div class="feature-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Layer 1</span>
+                            <span class="detail-value">Quick filter blocks credentials, exfil URLs, unicode tricks</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Layer 2</span>
+                            <span class="detail-value">Source classification assigns trust levels by origin</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Layer 3</span>
+                            <span class="detail-value">LLM semantic analysis (isolated subprocess, no tools)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Clean Pass</span>
+                            <span class="detail-value">Allowed content passes to agent without wrappers</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="feature-card">
@@ -539,7 +551,7 @@
                     <p>Prevents accidental leakage of system prompts, config values, and environment variables.</p>
                 </div>
 
-                <div class="feature-card">
+                <div class="feature-card feature-large">
                     <div class="feature-icon icon-inspect">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <circle cx="11" cy="11" r="8"/>
@@ -547,8 +559,26 @@
                             <path d="M11 8v6M8 11h6"/>
                         </svg>
                     </div>
-                    <h3>Skill Inspection</h3>
-                    <p>LLM analyzes skills before installation, detecting malicious prompts, shell commands, and exfil attempts.</p>
+                    <h3>Skill Security Gate</h3>
+                    <p>Skills are analyzed <strong>before installation</strong> to prevent supply chain attacks with hidden prompt injections or dangerous commands.</p>
+                    <div class="feature-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Layer 1</span>
+                            <span class="detail-value">Trust check — bundled and trusted skills skip inspection</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Layer 2</span>
+                            <span class="detail-value">Quick filter blocks jailbreaks, curl|sh, rm -rf, credential patterns</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Layer 3</span>
+                            <span class="detail-value">LLM semantic analysis detects hidden exfil, obfuscation</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Critical</span>
+                            <span class="detail-value">Blocked with no bypass — user cannot override</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="feature-card">
@@ -676,7 +706,7 @@
                                 <span class="status status-bad">None</span>
                             </td>
                             <td class="dillobot-col">
-                                <span class="status status-good">LLM inspection + quick pattern scan</span>
+                                <span class="status status-good">LLM inspection + pattern scan (critical = blocked, no bypass)</span>
                             </td>
                         </tr>
                         <tr>
@@ -780,18 +810,18 @@
         <section class="architecture-section">
             <div class="section-header">
                 <h2 class="section-title">Security Architecture</h2>
-                <p class="section-subtitle">Layered defense that stays out of your way</p>
+                <p class="section-subtitle">Out-of-band security — the agent never sees blocked content</p>
             </div>
             <div class="architecture-diagram">
                 <div class="arch-layer layer-input">
                     <div class="layer-label">Input Sources</div>
                     <div class="layer-content">
-                        <span class="trust-high" title="High trust">User CLI</span>
-                        <span class="trust-medium" title="Medium trust">Skills</span>
-                        <span class="trust-low" title="Low trust">Email</span>
-                        <span class="trust-low" title="Low trust">Webhooks</span>
-                        <span class="trust-low" title="Low trust">API</span>
-                        <span class="trust-low" title="Low trust">Web Content</span>
+                        <span class="trust-high" title="High trust - bypasses security gate">User CLI</span>
+                        <span class="trust-high" title="High trust - bypasses security gate">Messaging</span>
+                        <span class="trust-medium" title="Medium trust - skill inspector">Skills</span>
+                        <span class="trust-low" title="Low trust - full security analysis">Email</span>
+                        <span class="trust-low" title="Low trust - full security analysis">Webhooks</span>
+                        <span class="trust-low" title="Low trust - full security analysis">API</span>
                     </div>
                 </div>
                 <div class="arch-arrow">
@@ -800,28 +830,28 @@
                     </svg>
                 </div>
                 <div class="arch-layer layer-security">
-                    <div class="layer-label">Security Pipeline</div>
+                    <div class="layer-label">Security Gate (Out-of-Band)</div>
+                    <div class="layer-note">Runs in isolated subprocess — no tools, no context</div>
                     <div class="security-steps">
                         <div class="security-step">
                             <span class="step-num">1</span>
-                            <span class="step-name">Quick Filter</span>
-                            <span class="step-desc">15 critical patterns</span>
+                            <span class="step-name">Source Classification</span>
+                            <span class="step-desc">Assign trust level</span>
                         </div>
                         <div class="security-step">
                             <span class="step-num">2</span>
-                            <span class="step-name">Source Classification</span>
-                            <span class="step-desc">High/Medium/Low trust assignment</span>
+                            <span class="step-name">Quick Filter</span>
+                            <span class="step-desc">Block credentials, exfil URLs</span>
                         </div>
                         <div class="security-step">
                             <span class="step-num">3</span>
                             <span class="step-name">LLM Analysis</span>
                             <span class="step-desc">Semantic threat detection</span>
                         </div>
-                        <div class="security-step">
-                            <span class="step-num">4</span>
-                            <span class="step-name">Content Wrapping</span>
-                            <span class="step-desc">Boundary markers</span>
-                        </div>
+                    </div>
+                    <div class="security-outcomes">
+                        <span class="outcome-blocked">🚫 BLOCKED → Log + Alert, return early</span>
+                        <span class="outcome-allowed">✅ ALLOWED → Pass clean content (no wrappers)</span>
                     </div>
                 </div>
                 <div class="arch-arrow">
@@ -832,7 +862,7 @@
                 <div class="arch-layer layer-agent">
                     <div class="layer-label">AI Agent</div>
                     <div class="layer-content">
-                        <span>Safe Processing</span>
+                        <span>Processes only verified content</span>
                     </div>
                 </div>
                 <div class="arch-arrow">
@@ -843,7 +873,7 @@
                 <div class="arch-layer layer-output">
                     <div class="layer-label">Output Filter</div>
                     <div class="layer-content">
-                        <span>Leak Prevention</span>
+                        <span>Redacts system prompts, config, credentials</span>
                     </div>
                 </div>
             </div>

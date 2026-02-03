@@ -884,7 +884,7 @@ section {
 
 .security-steps {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
 }
 
@@ -926,6 +926,39 @@ section {
 .arch-arrow svg {
     width: 24px;
     height: 24px;
+}
+
+.layer-note {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: -8px;
+    margin-bottom: 8px;
+}
+
+.security-outcomes {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.outcome-blocked,
+.outcome-allowed {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+.outcome-blocked {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.outcome-allowed {
+    background: rgba(74, 222, 128, 0.2);
+    color: var(--accent);
 }
 
 /* Install Section */
