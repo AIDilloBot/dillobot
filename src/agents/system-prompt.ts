@@ -44,8 +44,39 @@ function buildMemorySection(params: { isMinimal: boolean; availableTools: Set<st
     return [];
   }
   return [
-    "## Memory Recall",
-    "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines. If low confidence after search, say you checked.",
+    "## Memory (MANDATORY)",
+    "",
+    "### At Session Start — DO THIS FIRST",
+    "1. Read `MEMORY.md` (long-term memory)",
+    "2. Read today's daily file: `memory/YYYY-MM-DD.md` (e.g., `memory/2026-02-02.md`)",
+    "3. Read yesterday's daily file if relevant context might be there",
+    "",
+    "Do NOT skip this. Do NOT ask if you should do it. Just do it silently at session start.",
+    "",
+    "### Before Answering Questions — MANDATORY",
+    "When the user asks about ANY of these, you MUST run `memory_search` FIRST:",
+    "- Prior work, projects, or decisions",
+    "- Dates, deadlines, or schedules",
+    "- People, contacts, or relationships",
+    "- Preferences or past choices",
+    "- Todos, tasks, or reminders",
+    '- "What did we...", "Did I mention...", "Remember when..."',
+    "",
+    "After `memory_search`, use `memory_get` to pull the specific lines you need.",
+    "If you skip this and guess wrong, you will give the user incorrect information.",
+    "",
+    "### Writing to Memory",
+    "Use edit or write tools to update memory files:",
+    "- `MEMORY.md` — Long-term memory (preferences, important decisions, durable facts)",
+    "- `memory/YYYY-MM-DD.md` — Daily log (today's notes, running context)",
+    "",
+    "**Triggers to write:**",
+    '- User says "remember this", "note that", "save this" → append to MEMORY.md or daily log',
+    "- Important decisions or preferences revealed → append to MEMORY.md",
+    "- Meeting notes, daily context → append to today's daily file",
+    "",
+    "### Updating Soul/Persona (SOUL.md)",
+    "SOUL.md defines your persona, tone, and behavior. Update it when the user asks you to change how you communicate or behave.",
     "",
   ];
 }
@@ -230,16 +261,148 @@ export function buildAgentSystemPrompt(params: {
     browser: "Control web browser",
     canvas: "Present/eval/snapshot the Canvas",
     nodes: "List/describe/notify/camera/screen on paired nodes",
-    cron: "Manage cron jobs and wake events (use for reminders; when scheduling a reminder, write the systemEvent text as something that will read like a reminder when it fires, and mention that it is a reminder depending on the time gap between setting and firing; include recent context in reminder text if appropriate)",
-    message: "Send messages and channel actions",
-    gateway: "Restart, apply config, or run updates on the running OpenClaw process",
-    agents_list: "List agent ids allowed for sessions_spawn",
-    sessions_list: "List other sessions (incl. sub-agents) with filters/last",
-    sessions_history: "Fetch history for another session/sub-agent",
-    sessions_send: "Send a message to another session/sub-agent",
-    sessions_spawn: "Spawn a sub-agent session",
-    session_status:
-      "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
+
+    // ===== MEMORY TOOLS (SEARCH) =====
+    memory_search: `Semantic search across MEMORY.md + memory/*.md files. **MANDATORY** before answering about prior work, decisions, dates, people, preferences, or todos.
+
+**Example:**
+\`\`\`json
+{ "query": "what did we decide about the API design", "maxResults": 5 }
+\`\`\`
+
+Returns snippets with path + line numbers. Follow up with memory_get to read specific lines.`,
+
+    memory_get: `Read specific lines from memory files after memory_search identifies relevant content.
+
+**Example:**
+\`\`\`json
+{ "path": "memory/projects.md", "from": 42, "lines": 20 }
+\`\`\`
+
+Only reads from MEMORY.md, memory/*.md, or configured extraPaths.`,
+
+    // ===== CRON / SCHEDULING =====
+    cron: `Manage cron jobs, scheduled tasks, and reminders. Actions: status, list, add, update, remove, run, runs, wake.
+
+**Quick reminder (one-shot, main session):**
+\`\`\`json
+{ "action": "add", "job": {
+  "name": "Reminder",
+  "schedule": { "kind": "at", "atMs": <unix-ms-timestamp> },
+  "sessionTarget": "main",
+  "payload": { "kind": "systemEvent", "text": "Reminder: <your reminder text>" },
+  "wakeMode": "now"
+}}
+\`\`\`
+
+**Recurring task (isolated session with delivery):**
+\`\`\`json
+{ "action": "add", "job": {
+  "name": "Daily summary",
+  "schedule": { "kind": "cron", "expr": "0 9 * * *", "tz": "America/Los_Angeles" },
+  "sessionTarget": "isolated",
+  "payload": { "kind": "agentTurn", "message": "Summarize today's tasks", "deliver": true, "channel": "slack", "to": "channel:C123" }
+}}
+\`\`\`
+
+**Schedule types:**
+- \`{ "kind": "at", "atMs": <unix-ms> }\` - one-shot at specific time
+- \`{ "kind": "every", "everyMs": 3600000 }\` - recurring interval (ms)
+- \`{ "kind": "cron", "expr": "0 9 * * *", "tz": "America/Los_Angeles" }\` - cron expression
+
+**Key rules:**
+- sessionTarget="main" requires payload.kind="systemEvent"
+- sessionTarget="isolated" requires payload.kind="agentTurn"
+- atMs is Unix milliseconds (use Date.now() + offset)
+- Use contextMessages:3 to include recent chat context in reminder text
+- Use \`{ "action": "list" }\` to see existing jobs
+- Use \`{ "action": "remove", "jobId": "..." }\` to delete a job`,
+
+    // ===== MESSAGING =====
+    message: `Send messages and perform channel actions (reactions, polls, typing, etc).
+
+**Send a message:**
+\`\`\`json
+{ "action": "send", "channel": "telegram", "to": "chat:-1001234567890", "message": "Hello!" }
+\`\`\`
+
+**Send with buttons (Telegram):**
+\`\`\`json
+{ "action": "send", "channel": "telegram", "to": "...", "message": "Choose:", "buttons": [[{"text": "Yes", "callback_data": "yes"}, {"text": "No", "callback_data": "no"}]] }
+\`\`\`
+
+**Add reaction:**
+\`\`\`json
+{ "action": "react", "channel": "slack", "to": "channel:C123", "messageId": "...", "emoji": "thumbsup" }
+\`\`\`
+
+**Channels:** telegram, slack, discord, whatsapp, signal, imessage
+**Targets:** Use channel-specific format (e.g., "channel:C123" for Slack, chat ID for Telegram)`,
+
+    // ===== GATEWAY =====
+    gateway: `Control the running OpenClaw gateway process.
+
+**Actions:**
+- \`{ "action": "restart" }\` - Restart the gateway
+- \`{ "action": "reload-config" }\` - Reload configuration without restart
+- \`{ "action": "status" }\` - Get gateway status
+- \`{ "action": "update" }\` - Check for and apply updates`,
+
+    // ===== SESSIONS / MULTI-AGENT =====
+    agents_list: "List available agent IDs that can be used with sessions_spawn.",
+
+    sessions_list: `List active sessions with optional filters.
+
+**Examples:**
+\`\`\`json
+{ "kinds": ["main", "group"], "limit": 10, "activeMinutes": 60 }
+\`\`\`
+
+**Kinds:** main, group, cron, hook, node, other
+Use messageLimit to include recent messages in results.`,
+
+    sessions_history: `Fetch conversation history from another session.
+
+**Example:**
+\`\`\`json
+{ "sessionKey": "agent:main:telegram:dm:123", "limit": 20 }
+\`\`\``,
+
+    sessions_send: `Send a message to another session or sub-agent.
+
+**By session key:**
+\`\`\`json
+{ "sessionKey": "agent:main:main", "message": "Check the email inbox" }
+\`\`\`
+
+**By label (for spawned sub-agents):**
+\`\`\`json
+{ "label": "research-agent", "message": "What did you find?" }
+\`\`\``,
+
+    sessions_spawn: `Spawn a new sub-agent session for parallel/delegated work.
+
+**Example:**
+\`\`\`json
+{ "label": "research", "agentId": "main", "message": "Research the topic and report back", "timeoutSeconds": 300 }
+\`\`\`
+
+The sub-agent runs independently. Use sessions_send to communicate with it later.`,
+
+    session_status: `Get current session status: time, usage, model, thinking level.
+
+**Example:**
+\`\`\`json
+{}
+\`\`\`
+
+**With model override (changes model for this session):**
+\`\`\`json
+{ "model": "opus" }
+\`\`\`
+
+Use this to check current time, token usage, or switch models mid-session.`,
+
     image: "Analyze an image with the configured image model",
   };
 
@@ -258,6 +421,8 @@ export function buildAgentSystemPrompt(params: {
     "browser",
     "canvas",
     "nodes",
+    "memory_search",
+    "memory_get",
     "cron",
     "message",
     "gateway",
@@ -265,6 +430,7 @@ export function buildAgentSystemPrompt(params: {
     "sessions_list",
     "sessions_history",
     "sessions_send",
+    "sessions_spawn",
     "session_status",
     "image",
   ];
@@ -383,10 +549,16 @@ export function buildAgentSystemPrompt(params: {
           "- browser: control openclaw's dedicated browser",
           "- canvas: present/eval/snapshot the Canvas",
           "- nodes: list/describe/notify/camera/screen on paired nodes",
-          "- cron: manage cron jobs and wake events (use for reminders; when scheduling a reminder, write the systemEvent text as something that will read like a reminder when it fires, and mention that it is a reminder depending on the time gap between setting and firing; include recent context in reminder text if appropriate)",
-          "- sessions_list: list sessions",
+          "- memory_search: semantic search MEMORY.md + memory/*.md (mandatory before answering about prior work/decisions/preferences)",
+          "- memory_get: read specific lines from memory files after memory_search",
+          "- cron: manage scheduled jobs/reminders (action: add/list/remove/run; sessionTarget: main+systemEvent or isolated+agentTurn)",
+          "- message: send messages to channels (action: send, channel: telegram/slack/discord, to: target)",
+          "- gateway: control gateway (action: restart/reload-config/status)",
+          "- sessions_list: list sessions (kinds: main/group/cron/hook)",
           "- sessions_history: fetch session history",
-          "- sessions_send: send to another session",
+          "- sessions_send: send to another session (sessionKey or label)",
+          "- sessions_spawn: spawn a sub-agent for parallel work",
+          "- session_status: get current time, usage, model info",
         ].join("\n"),
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",
     "If a task is more complex or takes longer, spawn a sub-agent. It will do the work for you and ping you when it's done. You can always check up on it.",

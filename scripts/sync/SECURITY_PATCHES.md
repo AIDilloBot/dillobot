@@ -604,7 +604,7 @@ User's `~/.openclaw/openclaw.json` should have:
 - 34. [ ] `src/agents/claude-code-sdk-stream.ts` exists
 - 35. [ ] `claude-code-agent` bypass in `src/agents/model-auth.ts` resolveApiKeyForProvider()
 - 36. [ ] `sdk.query()` usage in `src/agents/claude-code-sdk-stream.ts`
-- 37. [ ] SDK configured with `getSdkToolsConfig()`, `maxTurns: 1`, `persistSession: false`
+- 37. [ ] SDK configured with `getSdkToolsConfig()`, `maxTurns: 100`, `persistSession: false`
 - 46. [ ] `getSdkToolsConfig()` function returns preset tools when context.tools populated
 - 38. [ ] `stripToolUseXml()` function in claude-code-sdk-stream.ts
 - 39. [ ] SDK stream buffers text (no text_delta during streaming, emits clean at end)
@@ -614,6 +614,10 @@ User's `~/.openclaw/openclaw.json` should have:
 - 43. [ ] `unifyChannels` in SessionSchema (zod-schema.session.ts)
 - 44. [ ] `unifyChannels` handling in buildAgentPeerSessionKey (session-key.ts)
 - 45. [ ] `unifyChannels` passed through resolve-route.ts
+- 47. [ ] `## Memory (MANDATORY)` section header in system-prompt.ts
+- 48. [ ] "At Session Start — DO THIS FIRST" subsection with explicit read instructions
+- 49. [ ] "Before Answering Questions — MANDATORY" subsection with memory_search requirement
+- 50. [ ] "Do NOT skip this" imperative instruction present
 
 ---
 
@@ -1008,3 +1012,51 @@ partialMessage.stopReason = "stop";
 - Check `stopReason` is always set to `"stop"` (never `"toolUse"`)
 - Check `partialMessage.content` filters out `type: "toolCall"` blocks
 - Check no condition sets `stopReason` based on tool call presence
+
+---
+
+### 23. Mandatory Memory System Prompt
+
+**Purpose:** Ensure the agent proactively uses its memory system at session start and before answering questions about prior context.
+
+**File:** `src/agents/system-prompt.ts`
+
+**Key Changes in `buildMemorySection()`:**
+
+1. **Section header made mandatory:**
+```typescript
+"## Memory (MANDATORY)",
+```
+
+2. **Session start instructions:**
+```typescript
+"### At Session Start — DO THIS FIRST",
+"1. Read `MEMORY.md` (long-term memory)",
+"2. Read today's daily file: `memory/YYYY-MM-DD.md` (e.g., `memory/2026-02-02.md`)",
+"3. Read yesterday's daily file if relevant context might be there",
+"",
+"Do NOT skip this. Do NOT ask if you should do it. Just do it silently at session start.",
+```
+
+3. **Mandatory before answering:**
+```typescript
+"### Before Answering Questions — MANDATORY",
+"When the user asks about ANY of these, you MUST run `memory_search` FIRST:",
+"- Prior work, projects, or decisions",
+"- Dates, deadlines, or schedules",
+"- People, contacts, or relationships",
+"- Preferences or past choices",
+"- Todos, tasks, or reminders",
+"- \"What did we...\", \"Did I mention...\", \"Remember when...\"",
+"",
+"After `memory_search`, use `memory_get` to pull the specific lines you need.",
+"If you skip this and guess wrong, you will give the user incorrect information.",
+```
+
+**Why:** Without forceful imperative language, the LLM knows what it *should* do but doesn't do it automatically. Using "MANDATORY", "MUST", and "DO THIS FIRST" with explicit triggers ensures consistent memory usage.
+
+**Verification:**
+- Check `## Memory (MANDATORY)` section header in buildMemorySection
+- Check "At Session Start — DO THIS FIRST" subsection exists
+- Check "Before Answering Questions — MANDATORY" subsection exists
+- Check "Do NOT skip this" instruction is present

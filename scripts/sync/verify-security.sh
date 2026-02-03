@@ -428,7 +428,46 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
-# Check 11: DilloBot branding (not OpenClaw)
+# Check 11: Mandatory memory system prompt
+echo ""
+echo "Checking mandatory memory system prompt..."
+if grep -q "## Memory (MANDATORY)" src/agents/system-prompt.ts 2>/dev/null; then
+    echo "✅ Memory section marked as MANDATORY in system-prompt.ts"
+else
+    echo "❌ CRITICAL: Memory section not marked MANDATORY!"
+    echo "   Agent will not proactively use memory system."
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "At Session Start" src/agents/system-prompt.ts 2>/dev/null; then
+    echo "✅ Session start memory instructions present"
+else
+    echo "❌ CRITICAL: Session start memory instructions missing!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "DO THIS FIRST" src/agents/system-prompt.ts 2>/dev/null; then
+    echo "✅ Imperative 'DO THIS FIRST' instruction present"
+else
+    echo "⚠️  WARNING: Imperative instruction may be missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if grep -q "Before Answering Questions" src/agents/system-prompt.ts 2>/dev/null; then
+    echo "✅ 'Before Answering Questions' section present"
+else
+    echo "❌ CRITICAL: Before Answering Questions section missing!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -q "you MUST run.*memory_search" src/agents/system-prompt.ts 2>/dev/null; then
+    echo "✅ MUST run memory_search instruction present"
+else
+    echo "⚠️  WARNING: memory_search requirement may be weak"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check 12: DilloBot branding (not OpenClaw)
 echo ""
 echo "Checking DilloBot branding..."
 if [ -f "src/dillobot-version.ts" ]; then
