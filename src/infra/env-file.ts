@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { storeCredential, retrieveCredential } from "../security-hardening/index.js";
 import { resolveConfigDir } from "../utils.js";
 
 function escapeRegExp(value: string): string {
@@ -54,5 +55,50 @@ export function upsertSharedEnvVar(params: {
   fs.writeFileSync(filepath, output, "utf8");
   fs.chmodSync(filepath, 0o600);
 
+  // DILLOBOT: Also save to vault for sensitive keys
+  const sensitiveKeys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"];
+  if (sensitiveKeys.includes(key)) {
+    storeCredential("openaiKey", key, { value }).catch(() => {
+      // best-effort
+    });
+  }
+
   return { path: filepath, updated, created: !raw };
+}
+
+// =============================================================================
+// DILLOBOT: Vault-Based Functions
+// =============================================================================
+
+/**
+ * Load a sensitive env var from vault.
+ * Falls back to process.env if not in vault.
+ */
+export async function loadEnvVarFromVault(key: string): Promise<string | null> {
+  try {
+    const stored = await retrieveCredential<{ value: string }>("openaiKey", key);
+    if (stored?.value) {
+      return stored.value;
+    }
+  } catch {
+    // Fall back to process.env
+  }
+  return process.env[key] ?? null;
+}
+
+/**
+ * Inject sensitive env vars from vault into process.env.
+ * Call this early in startup.
+ */
+export async function injectVaultEnvVars(): Promise<void> {
+  const sensitiveKeys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"];
+  for (const key of sensitiveKeys) {
+    if (process.env[key]) {
+      continue; // Already set, don't override
+    }
+    const value = await loadEnvVarFromVault(key);
+    if (value) {
+      process.env[key] = value;
+    }
+  }
 }

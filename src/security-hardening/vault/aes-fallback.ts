@@ -7,8 +7,8 @@
 
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 import type { SecureVault, VaultBackend } from "../types.js";
 
 /**
@@ -83,12 +83,8 @@ export class AesFallbackVault implements SecureVault {
     // Get or create salt
     const salt = await this.getOrCreateSalt();
 
-    // Derive master key from password
+    // Derive master key from password (constructor password, env var, or machine-derived)
     const password = this.password ?? (await this.getPasswordFromEnvironment());
-    if (!password) {
-      throw new Error("Vault password required. Set DILLOBOT_VAULT_PASSWORD or provide password.");
-    }
-
     this.masterKey = await this.deriveKey(password, salt);
     this.initialized = true;
   }
@@ -114,10 +110,35 @@ export class AesFallbackVault implements SecureVault {
   }
 
   /**
-   * Get password from environment variable.
+   * Get password from environment or derive from machine identity.
+   *
+   * Priority:
+   * 1. DILLOBOT_VAULT_PASSWORD env var (for testing/override)
+   * 2. OPENCLAW_VAULT_PASSWORD env var (legacy)
+   * 3. Machine-derived key (hostname + homedir + platform hash)
    */
-  private async getPasswordFromEnvironment(): Promise<string | undefined> {
-    return process.env.DILLOBOT_VAULT_PASSWORD ?? process.env.OPENCLAW_VAULT_PASSWORD;
+  private async getPasswordFromEnvironment(): Promise<string> {
+    // Check env vars first (for testing/override)
+    const envPassword = process.env.DILLOBOT_VAULT_PASSWORD ?? process.env.OPENCLAW_VAULT_PASSWORD;
+    if (envPassword) {
+      return envPassword;
+    }
+
+    // Generate machine-derived password (no user input needed)
+    // This ties the vault to this specific machine
+    return this.getMachineId();
+  }
+
+  /**
+   * Generate a machine-specific identifier for passwordless encryption.
+   *
+   * Uses combination of hostname, homedir, platform, and arch to create
+   * a unique but deterministic key for this machine. Credentials encrypted
+   * with this key won't decrypt on a different machine.
+   */
+  private getMachineId(): string {
+    const data = `dillobot:vault:${os.hostname()}:${os.homedir()}:${os.platform()}:${os.arch()}`;
+    return crypto.createHash("sha256").update(data).digest("hex");
   }
 
   /**
@@ -125,10 +146,17 @@ export class AesFallbackVault implements SecureVault {
    */
   private async deriveKey(password: string, salt: Buffer): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      crypto.pbkdf2(password, salt, PBKDF2_CONFIG.iterations, PBKDF2_CONFIG.keyLength, PBKDF2_CONFIG.digest, (err: Error | null, key: Buffer) => {
-        if (err) reject(err);
-        else resolve(key);
-      });
+      crypto.pbkdf2(
+        password,
+        salt,
+        PBKDF2_CONFIG.iterations,
+        PBKDF2_CONFIG.keyLength,
+        PBKDF2_CONFIG.digest,
+        (err: Error | null, key: Buffer) => {
+          if (err) reject(err);
+          else resolve(key);
+        },
+      );
     });
   }
 
@@ -230,7 +258,9 @@ export class AesFallbackVault implements SecureVault {
 
     // Overwrite with zeros before deletion (secure deletion)
     const entry = vault.entries[key];
-    entry.ciphertext = Buffer.alloc(Buffer.from(entry.ciphertext, "base64").length).toString("base64");
+    entry.ciphertext = Buffer.alloc(Buffer.from(entry.ciphertext, "base64").length).toString(
+      "base64",
+    );
 
     delete vault.entries[key];
     await this.saveVault(vault);

@@ -18,6 +18,11 @@ export {
   ensureAuthProfileStore,
   loadAuthProfileStore,
   saveAuthProfileStore,
+  // DILLOBOT: Async vault-based functions
+  loadAuthProfileStoreFromVault,
+  saveAuthProfileStoreToVault,
+  hasVaultAuthProfiles,
+  migrateAuthProfilesToVault,
 } from "./auth-profiles/store.js";
 export type {
   ApiKeyCredential,

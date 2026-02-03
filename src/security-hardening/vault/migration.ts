@@ -5,11 +5,11 @@
  */
 
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 import type { SecureVault, VaultMigrationResult } from "../types.js";
-import { buildVaultKey } from "./vault.js";
 import { secureDelete } from "./aes-fallback.js";
+import { buildVaultKey } from "./vault.js";
 
 /**
  * Paths to plaintext credential files in OpenClaw.
@@ -17,8 +17,13 @@ import { secureDelete } from "./aes-fallback.js";
 const PLAINTEXT_PATHS = {
   deviceAuth: path.join(os.homedir(), ".openclaw", "identity", "device-auth.json"),
   deviceIdentity: path.join(os.homedir(), ".openclaw", "identity", "device.json"),
-  authProfiles: path.join(os.homedir(), ".openclaw", "auth.json"),
+  authProfiles: path.join(os.homedir(), ".openclaw", "auth-profiles.json"),
+  legacyAuthProfiles: path.join(os.homedir(), ".openclaw", "auth.json"),
   gatewayToken: path.join(os.homedir(), ".openclaw", "gateway-token"),
+  // DILLOBOT: Additional paths for comprehensive vault migration
+  copilotToken: path.join(os.homedir(), ".openclaw", "credentials", "github-copilot.token.json"),
+  envFile: path.join(os.homedir(), ".openclaw", ".env"),
+  pairedDevices: path.join(os.homedir(), ".openclaw", "devices", "paired.json"),
 };
 
 /**
@@ -138,6 +143,36 @@ export async function migrateToSecureVault(vault: SecureVault): Promise<VaultMig
     });
   }
 
+  // DILLOBOT: Migrate Copilot token
+  try {
+    const migrated = await migrateCopilotToken(vault);
+    if (migrated) {
+      result.migrated.push("copilot-token");
+    } else {
+      result.skipped.push("copilot-token");
+    }
+  } catch (error) {
+    result.failed.push({
+      key: "copilot-token",
+      error: (error as Error).message,
+    });
+  }
+
+  // DILLOBOT: Migrate env file (OpenAI key, etc.)
+  try {
+    const migrated = await migrateEnvFile(vault);
+    if (migrated) {
+      result.migrated.push("env-file");
+    } else {
+      result.skipped.push("env-file");
+    }
+  } catch (error) {
+    result.failed.push({
+      key: "env-file",
+      error: (error as Error).message,
+    });
+  }
+
   // Create migration marker if any migrations succeeded
   if (result.migrated.length > 0) {
     await createMigrationMarker(result);
@@ -250,6 +285,73 @@ async function migrateGatewayToken(vault: SecureVault): Promise<boolean> {
 
     console.info(`[DilloBot Vault] Migrated gateway token from ${filePath}`);
     return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * DILLOBOT: Migrate GitHub Copilot token.
+ */
+async function migrateCopilotToken(vault: SecureVault): Promise<boolean> {
+  const filePath = PLAINTEXT_PATHS.copilotToken;
+
+  try {
+    const content = await fs.readFile(filePath, "utf-8");
+    const data = JSON.parse(content);
+
+    if (!data?.token) {
+      return false;
+    }
+
+    // Store in vault
+    const key = buildVaultKey("copilotToken", "default");
+    await vault.store(key, Buffer.from(JSON.stringify(data)));
+
+    // Note: We keep the file as a cache, but the vault is authoritative
+    console.info(`[DilloBot Vault] Migrated Copilot token from ${filePath}`);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * DILLOBOT: Migrate sensitive env vars from .env file.
+ */
+async function migrateEnvFile(vault: SecureVault): Promise<boolean> {
+  const filePath = PLAINTEXT_PATHS.envFile;
+  const sensitiveKeys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"];
+
+  try {
+    const content = await fs.readFile(filePath, "utf-8");
+    const lines = content.split(/\r?\n/);
+    let migrated = false;
+
+    for (const line of lines) {
+      const match = line.match(/^\s*(?:export\s+)?([A-Z_]+)\s*=\s*(.+)$/);
+      if (!match) continue;
+
+      const [, keyName, value] = match;
+      if (!sensitiveKeys.includes(keyName)) continue;
+
+      const trimmedValue = value.trim().replace(/^["']|["']$/g, "");
+      if (!trimmedValue) continue;
+
+      // Store in vault
+      const key = buildVaultKey("openaiKey", keyName);
+      await vault.store(key, Buffer.from(JSON.stringify({ value: trimmedValue })));
+      migrated = true;
+      console.info(`[DilloBot Vault] Migrated ${keyName} from ${filePath}`);
+    }
+
+    return migrated;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return false;

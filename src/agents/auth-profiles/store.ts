@@ -4,6 +4,11 @@ import lockfile from "proper-lockfile";
 import type { AuthProfileCredential, AuthProfileStore, ProfileUsageStats } from "./types.js";
 import { resolveOAuthPath } from "../../config/paths.js";
 import { loadJsonFile, saveJsonFile } from "../../infra/json-file.js";
+import {
+  storeAuthProfiles,
+  retrieveAuthProfiles,
+  hasCredential,
+} from "../../security-hardening/index.js";
 import { AUTH_STORE_LOCK_OPTIONS, AUTH_STORE_VERSION, log } from "./constants.js";
 import { syncExternalCliCredentials } from "./external-cli-sync.js";
 import { ensureAuthStoreFile, resolveAuthStorePath, resolveLegacyAuthStorePath } from "./paths.js";
@@ -407,4 +412,109 @@ export function saveAuthProfileStore(store: AuthProfileStore, agentDir?: string)
     usageStats: store.usageStats ?? undefined,
   } satisfies AuthProfileStore;
   saveJsonFile(authPath, payload);
+
+  // DILLOBOT: Also save to secure vault (fire-and-forget for sync compatibility)
+  const vaultId = agentDir ? `agent:${agentDir}` : "default";
+  storeAuthProfiles(vaultId, payload).catch((err) => {
+    log.warn("failed to save auth profiles to vault", { err, vaultId });
+  });
+}
+
+// =============================================================================
+// DILLOBOT: Async Vault-Based Functions
+// =============================================================================
+
+/**
+ * Load auth profiles from secure vault.
+ * Falls back to JSON file if vault is empty.
+ */
+export async function loadAuthProfileStoreFromVault(agentDir?: string): Promise<AuthProfileStore> {
+  const vaultId = agentDir ? `agent:${agentDir}` : "default";
+
+  try {
+    const vaultStore = await retrieveAuthProfiles<AuthProfileStore>(vaultId);
+    if (vaultStore && Object.keys(vaultStore.profiles || {}).length > 0) {
+      // Validate and coerce vault data
+      const coerced = coerceAuthStore(vaultStore);
+      if (coerced) {
+        // Sync external CLI credentials
+        const synced = syncExternalCliCredentials(coerced);
+        if (synced) {
+          // Save back to vault if we synced new credentials
+          await storeAuthProfiles(vaultId, coerced);
+        }
+        return coerced;
+      }
+    }
+  } catch (err) {
+    log.warn("failed to load auth profiles from vault, falling back to JSON", {
+      err,
+      vaultId,
+    });
+  }
+
+  // Fallback to JSON file
+  return loadAuthProfileStore();
+}
+
+/**
+ * Save auth profiles to secure vault (async).
+ * Also saves to JSON file for backward compatibility.
+ */
+export async function saveAuthProfileStoreToVault(
+  store: AuthProfileStore,
+  agentDir?: string,
+): Promise<void> {
+  const vaultId = agentDir ? `agent:${agentDir}` : "default";
+  const payload = {
+    version: AUTH_STORE_VERSION,
+    profiles: store.profiles,
+    order: store.order ?? undefined,
+    lastGood: store.lastGood ?? undefined,
+    usageStats: store.usageStats ?? undefined,
+  } satisfies AuthProfileStore;
+
+  // Save to vault (primary)
+  await storeAuthProfiles(vaultId, payload);
+
+  // Also save to JSON file (backward compatibility cache)
+  const authPath = resolveAuthStorePath(agentDir);
+  saveJsonFile(authPath, payload);
+}
+
+/**
+ * Check if auth profiles exist in the vault.
+ */
+export async function hasVaultAuthProfiles(agentDir?: string): Promise<boolean> {
+  const vaultId = agentDir ? `agent:${agentDir}` : "default";
+  return hasCredential("authProfile", vaultId);
+}
+
+/**
+ * Migrate plaintext auth profiles to secure vault.
+ * Called during startup to ensure credentials are in vault.
+ */
+export async function migrateAuthProfilesToVault(agentDir?: string): Promise<boolean> {
+  const vaultId = agentDir ? `agent:${agentDir}` : "default";
+
+  // Check if already in vault
+  const inVault = await hasCredential("authProfile", vaultId);
+  if (inVault) {
+    return false; // Already migrated
+  }
+
+  // Load from JSON file
+  const store = loadAuthProfileStore();
+  if (Object.keys(store.profiles).length === 0) {
+    return false; // Nothing to migrate
+  }
+
+  // Save to vault
+  await storeAuthProfiles(vaultId, store);
+  log.info("migrated auth profiles to secure vault", {
+    vaultId,
+    profileCount: Object.keys(store.profiles).length,
+  });
+
+  return true;
 }

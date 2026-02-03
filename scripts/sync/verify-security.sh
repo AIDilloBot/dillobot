@@ -638,6 +638,109 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 15: OS Keychain Vault Integration
+echo ""
+echo "Checking OS keychain vault integration..."
+
+# Check vault-manager.ts exists
+if [ -f "src/security-hardening/vault/vault-manager.ts" ]; then
+    echo "✅ vault-manager.ts exists"
+else
+    echo "❌ CRITICAL: vault-manager.ts missing!"
+    echo "   Credentials will be stored in plaintext!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check AES fallback vault exists
+if [ -f "src/security-hardening/vault/aes-fallback.ts" ]; then
+    echo "✅ aes-fallback.ts exists"
+else
+    echo "❌ CRITICAL: aes-fallback.ts missing!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check passwordless machine-derived key
+if grep -q "getMachineId" src/security-hardening/vault/aes-fallback.ts 2>/dev/null; then
+    echo "✅ Machine-derived key (passwordless) implemented"
+else
+    echo "❌ CRITICAL: getMachineId function missing - vault requires password!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check vault key prefixes
+if grep -q "VAULT_KEY_PREFIXES" src/security-hardening/vault/vault.ts 2>/dev/null; then
+    echo "✅ VAULT_KEY_PREFIXES defined in vault.ts"
+else
+    echo "⚠️  WARNING: VAULT_KEY_PREFIXES missing from vault.ts"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check auth-profiles uses vault
+if grep -q "storeAuthProfiles\|loadAuthProfileStoreFromVault" src/agents/auth-profiles/store.ts 2>/dev/null; then
+    echo "✅ Auth profiles store uses vault functions"
+else
+    echo "❌ CRITICAL: Auth profiles store not using vault!"
+    echo "   API keys will be stored in plaintext JSON!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check device-identity uses vault
+if grep -q "storeDeviceIdentity\|loadOrCreateDeviceIdentityAsync" src/infra/device-identity.ts 2>/dev/null; then
+    echo "✅ Device identity uses vault functions"
+else
+    echo "⚠️  WARNING: Device identity may not use vault for private keys"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check device-auth uses vault
+if grep -q "storeDeviceAuth\|loadDeviceAuthTokenFromVault" src/infra/device-auth-store.ts 2>/dev/null; then
+    echo "✅ Device auth store uses vault functions"
+else
+    echo "⚠️  WARNING: Device auth store may not use vault"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check env-file vault integration
+if grep -q "loadEnvVarFromVault\|injectVaultEnvVars" src/infra/env-file.ts 2>/dev/null; then
+    echo "✅ Env file integrates with vault"
+else
+    echo "⚠️  WARNING: Env file may not integrate with vault"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check migration on startup
+if grep -q "triggerVaultMigration\|migrateToSecureVault" src/cli/run-main.ts 2>/dev/null; then
+    echo "✅ Vault migration triggered on startup"
+else
+    echo "❌ CRITICAL: Vault migration not triggered on startup!"
+    echo "   Existing plaintext credentials won't be migrated!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check migration.ts exists
+if [ -f "src/security-hardening/vault/migration.ts" ]; then
+    echo "✅ vault/migration.ts exists"
+else
+    echo "❌ CRITICAL: vault/migration.ts missing!"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Check keytar in optionalDependencies
+if grep -q '"keytar"' package.json 2>/dev/null; then
+    echo "✅ keytar in package.json (optional dependency)"
+else
+    echo "⚠️  WARNING: keytar not in package.json - OS keychain not available"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# Check vault tests exist
+if [ -f "src/security-hardening/vault/vault-manager.test.ts" ] && [ -f "src/security-hardening/vault/aes-fallback.test.ts" ]; then
+    echo "✅ Vault test files exist"
+else
+    echo "⚠️  WARNING: Vault test files missing"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 # Summary
 echo ""
 echo "=================================="

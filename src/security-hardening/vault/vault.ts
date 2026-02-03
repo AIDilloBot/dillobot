@@ -208,6 +208,12 @@ export const VAULT_KEY_PREFIXES = {
   pairing: "pairing:",
   /** Gateway tokens */
   gateway: "gateway:",
+  /** GitHub Copilot token cache */
+  copilotToken: "copilot-token:",
+  /** OpenAI API key (was stored in .env) */
+  openaiKey: "openai-key:",
+  /** WhatsApp credentials */
+  whatsappCreds: "whatsapp-creds:",
 } as const;
 
 /**

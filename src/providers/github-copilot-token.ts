@@ -1,6 +1,7 @@
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
 import { loadJsonFile, saveJsonFile } from "../infra/json-file.js";
+import { storeCredential, retrieveCredential } from "../security-hardening/index.js";
 
 const COPILOT_TOKEN_URL = "https://api.github.com/copilot_internal/v2/token";
 
@@ -90,13 +91,25 @@ export async function resolveCopilotApiToken(params: {
 }> {
   const env = params.env ?? process.env;
   const cachePath = resolveCopilotTokenCachePath(env);
-  const cached = loadJsonFile(cachePath) as CachedCopilotToken | undefined;
+
+  // DILLOBOT: Try vault first, then fall back to JSON file
+  let cached: CachedCopilotToken | undefined;
+  try {
+    cached = (await retrieveCredential<CachedCopilotToken>("copilotToken", "default")) ?? undefined;
+  } catch {
+    // Fall back to JSON
+  }
+
+  if (!cached) {
+    cached = loadJsonFile(cachePath) as CachedCopilotToken | undefined;
+  }
+
   if (cached && typeof cached.token === "string" && typeof cached.expiresAt === "number") {
     if (isTokenUsable(cached)) {
       return {
         token: cached.token,
         expiresAt: cached.expiresAt,
-        source: `cache:${cachePath}`,
+        source: `cache:vault`,
         baseUrl: deriveCopilotApiBaseUrlFromToken(cached.token) ?? DEFAULT_COPILOT_API_BASE_URL,
       };
     }
@@ -121,6 +134,13 @@ export async function resolveCopilotApiToken(params: {
     expiresAt: json.expiresAt,
     updatedAt: Date.now(),
   };
+
+  // DILLOBOT: Save to vault (primary) and JSON file (fallback)
+  try {
+    await storeCredential("copilotToken", "default", payload);
+  } catch {
+    // best-effort
+  }
   saveJsonFile(cachePath, payload);
 
   return {

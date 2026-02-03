@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
+import { storeDeviceAuth, retrieveDeviceAuth, hasCredential } from "../security-hardening/index.js";
 
 export type DeviceAuthEntry = {
   token: string;
@@ -139,4 +140,104 @@ export function clearDeviceAuthToken(params: {
   };
   delete next.tokens[role];
   writeStore(filePath, next);
+
+  // DILLOBOT: Also clear from vault (fire-and-forget)
+  storeDeviceAuth(params.deviceId, next).catch(() => {
+    // best-effort
+  });
+}
+
+// =============================================================================
+// DILLOBOT: Async Vault-Based Functions
+// =============================================================================
+
+/**
+ * Load device auth token from secure vault.
+ * Falls back to JSON file if vault is empty.
+ */
+export async function loadDeviceAuthTokenFromVault(params: {
+  deviceId: string;
+  role: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<DeviceAuthEntry | null> {
+  const vaultStore = await retrieveDeviceAuth<DeviceAuthStore>(params.deviceId);
+  if (vaultStore?.deviceId === params.deviceId) {
+    const role = normalizeRole(params.role);
+    const entry = vaultStore.tokens?.[role];
+    if (entry?.token) {
+      return entry;
+    }
+  }
+
+  // Fallback to JSON file
+  return loadDeviceAuthToken(params);
+}
+
+/**
+ * Store device auth token to secure vault.
+ * Also saves to JSON file for backward compatibility.
+ */
+export async function storeDeviceAuthTokenToVault(params: {
+  deviceId: string;
+  role: string;
+  token: string;
+  scopes?: string[];
+  env?: NodeJS.ProcessEnv;
+}): Promise<DeviceAuthEntry> {
+  const filePath = resolveDeviceAuthPath(params.env);
+  const existing = readStore(filePath);
+  const role = normalizeRole(params.role);
+  const next: DeviceAuthStore = {
+    version: 1,
+    deviceId: params.deviceId,
+    tokens:
+      existing && existing.deviceId === params.deviceId && existing.tokens
+        ? { ...existing.tokens }
+        : {},
+  };
+  const entry: DeviceAuthEntry = {
+    token: params.token,
+    role,
+    scopes: normalizeScopes(params.scopes),
+    updatedAtMs: Date.now(),
+  };
+  next.tokens[role] = entry;
+
+  // Save to vault (primary)
+  await storeDeviceAuth(params.deviceId, next);
+
+  // Save to JSON file (backward compatibility)
+  writeStore(filePath, next);
+
+  return entry;
+}
+
+/**
+ * Check if device auth exists in vault.
+ */
+export async function hasVaultDeviceAuth(deviceId: string): Promise<boolean> {
+  return hasCredential("deviceAuth", deviceId);
+}
+
+/**
+ * Migrate existing plaintext device auth to vault.
+ */
+export async function migrateDeviceAuthToVault(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
+  const filePath = resolveDeviceAuthPath(env);
+  const store = readStore(filePath);
+  if (!store?.deviceId || !store.tokens) {
+    return false;
+  }
+
+  // Check if already in vault
+  const inVault = await hasCredential("deviceAuth", store.deviceId);
+  if (inVault) {
+    return false;
+  }
+
+  // Store in vault
+  await storeDeviceAuth(store.deviceId, store);
+  return true;
 }

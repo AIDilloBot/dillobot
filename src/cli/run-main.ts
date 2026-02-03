@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv } from "../infra/dotenv.js";
+import { injectVaultEnvVars } from "../infra/env-file.js";
 import { normalizeEnv } from "../infra/env.js";
 import { formatUncaughtError } from "../infra/errors.js";
 import { isMainModule } from "../infra/is-main.js";
@@ -29,6 +30,16 @@ export async function runCli(argv: string[] = process.argv) {
   loadDotEnv({ quiet: true });
   normalizeEnv();
   ensureOpenClawCliOnPath();
+
+  // DILLOBOT: Inject sensitive env vars from vault (if available)
+  // This supplements .env loading with vault-stored credentials
+  await injectVaultEnvVars().catch(() => {
+    // Silently ignore vault errors during startup
+  });
+
+  // DILLOBOT: Trigger vault migration on startup (lazy, background)
+  // This migrates plaintext credentials to the vault without blocking
+  triggerVaultMigration();
 
   // Enforce the minimum supported runtime before doing any work.
   assertSupportedRuntime();
@@ -128,4 +139,35 @@ function stripWindowsNodeExec(argv: string[]): string[] {
 
 export function isCliMainModule(): boolean {
   return isMainModule({ currentFile: fileURLToPath(import.meta.url) });
+}
+
+/**
+ * DILLOBOT: Trigger vault migration in the background.
+ * This runs lazily without blocking CLI startup.
+ */
+function triggerVaultMigration(): void {
+  // Import lazily to avoid blocking startup
+  import("../security-hardening/index.js")
+    .then(async ({ isMigrationCompleted, migrateToSecureVault, getVault }) => {
+      const completed = await isMigrationCompleted();
+      if (completed) {
+        return;
+      }
+
+      const vault = await getVault();
+      const result = await migrateToSecureVault(vault);
+
+      if (result.migrated.length > 0) {
+        console.info(`[DilloBot] Migrated ${result.migrated.length} credential(s) to secure vault`);
+      }
+      if (result.failed.length > 0) {
+        console.warn(
+          `[DilloBot] Failed to migrate ${result.failed.length} credential(s):`,
+          result.failed.map((f) => f.key).join(", "),
+        );
+      }
+    })
+    .catch(() => {
+      // Silently ignore migration errors
+    });
 }

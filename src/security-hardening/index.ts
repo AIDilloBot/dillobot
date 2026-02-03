@@ -20,8 +20,38 @@ export { enforceSecurityPolicy, getHardenedDefaults } from "./policy/security-po
 export { getSecurityPolicyConfig } from "./policy/policy-config.js";
 
 // Credential vault
-export { createVault, getDefaultVaultBackend } from "./vault/vault.js";
-export { migrateToSecureVault } from "./vault/migration.js";
+export {
+  createVault,
+  getDefaultVaultBackend,
+  VAULT_KEY_PREFIXES,
+  buildVaultKey,
+} from "./vault/vault.js";
+export {
+  migrateToSecureVault,
+  isMigrationCompleted,
+  hasPlaintextCredentials,
+  getMigrationStatus,
+} from "./vault/migration.js";
+
+// Vault manager (main entry point for credential storage)
+export {
+  getVault,
+  getVaultBackend,
+  storeCredential,
+  retrieveCredential,
+  deleteCredential,
+  hasCredential,
+  listCredentials,
+  listAllCredentials,
+  storeAuthProfiles,
+  retrieveAuthProfiles,
+  storeDeviceIdentity,
+  retrieveDeviceIdentity,
+  storeDeviceAuth,
+  retrieveDeviceAuth,
+  resetVaultInstance,
+  type VaultKeyPrefix,
+} from "./vault/vault-manager.js";
 
 // Injection protection - Quick pre-filter
 export {

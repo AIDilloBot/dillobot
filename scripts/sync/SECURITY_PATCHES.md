@@ -1099,3 +1099,152 @@ await fs.mkdir(memoryDir, { recursive: true });
 - Check `memoryTemplate = await loadTemplate(DEFAULT_MEMORY_FILENAME)` in workspace.ts
 - Check `writeFileIfMissing(memoryPath, memoryTemplate)` in workspace.ts
 - Check `fs.mkdir(memoryDir, { recursive: true })` creates memory/ directory
+
+---
+
+### 25. OS Keychain Vault Integration
+
+**Purpose:** Store all sensitive credentials (API keys, private keys, auth tokens) in encrypted storage instead of plaintext JSON files. Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) with an AES-256-GCM encrypted file fallback. **No password required from user.**
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Vault Hierarchy                         │
+├─────────────────────────────────────────────────────────────┤
+│  1. OS Keychain (keytar)     - Preferred when available     │
+│  2. AES-256-GCM File         - Fallback with machine key    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Files:**
+
+| File | Purpose |
+|------|---------|
+| `src/security-hardening/vault/vault.ts` | Vault factory, key prefixes, `buildVaultKey()` |
+| `src/security-hardening/vault/vault-manager.ts` | Singleton manager with typed helpers |
+| `src/security-hardening/vault/aes-fallback.ts` | AES-256-GCM encrypted file vault |
+| `src/security-hardening/vault/keytar-vault.ts` | OS keychain backend via keytar |
+| `src/security-hardening/vault/migration.ts` | Plaintext → vault migration |
+| `src/security-hardening/types.ts` | `SecureVault` interface |
+
+**Vault Key Prefixes:**
+
+```typescript
+export const VAULT_KEY_PREFIXES = {
+  deviceAuth: "device-auth:",       // Device auth tokens
+  deviceIdentity: "device-id:",     // Ed25519 private keys
+  authProfile: "auth-profile:",     // API keys, OAuth tokens
+  pairing: "pairing:",              // Device pairing tokens
+  gateway: "gateway:",              // Gateway tokens
+  copilotToken: "copilot:",         // GitHub Copilot tokens
+  openaiKey: "openai:",             // OpenAI/Anthropic/Gemini API keys
+  whatsappCreds: "whatsapp:",       // WhatsApp credentials
+} as const;
+```
+
+**Passwordless Operation:**
+
+The AES fallback vault derives its encryption key from machine identity (no user password required):
+
+```typescript
+private getMachineId(): string {
+  const data = `${os.hostname()}:${os.homedir()}:${os.platform()}:${os.arch()}`;
+  return crypto.createHash("sha256").update(data).digest("hex");
+}
+```
+
+This ensures:
+- Credentials encrypted at rest
+- Tied to machine (won't decrypt elsewhere)
+- No user prompts or password management
+
+Environment variables can override: `DILLOBOT_VAULT_PASSWORD` or `OPENCLAW_VAULT_PASSWORD`
+
+**Migration from Plaintext:**
+
+On startup, `triggerVaultMigration()` in `run-main.ts` migrates:
+
+```typescript
+const PLAINTEXT_PATHS = {
+  deviceAuth: "~/.openclaw/identity/device-auth.json",
+  deviceIdentity: "~/.openclaw/identity/device.json",
+  authProfiles: "~/.openclaw/auth-profiles.json",
+  legacyAuthProfiles: "~/.openclaw/auth.json",
+  gatewayToken: "~/.openclaw/gateway-token",
+  copilotToken: "~/.openclaw/credentials/github-copilot.token.json",
+  envFile: "~/.openclaw/.env",    // OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+  pairedDevices: "~/.openclaw/devices/paired.json",
+};
+```
+
+After migration:
+1. Credentials stored in vault
+2. Plaintext files securely deleted
+3. Marker created: `~/.openclaw/security/.migrated`
+
+**Credential Storage Integration:**
+
+Files updated to use vault:
+
+| File | Change |
+|------|--------|
+| `src/agents/auth-profiles/store.ts` | Fire-and-forget vault save, async vault functions |
+| `src/infra/device-identity.ts` | Private key in vault, public metadata in JSON |
+| `src/infra/device-auth-store.ts` | Async vault storage functions |
+| `src/providers/github-copilot-token.ts` | Vault-first retrieval, vault+JSON save |
+| `src/infra/env-file.ts` | Vault storage for sensitive env vars |
+
+**Hybrid Storage Pattern:**
+
+For backward compatibility, some files use hybrid storage:
+- **Vault:** Sensitive data (private keys, tokens, API keys)
+- **JSON:** Non-sensitive metadata (device ID, public keys, timestamps)
+
+Example from device-identity.ts:
+```typescript
+// JSON file: public metadata (safe)
+type StoredIdentityPublic = {
+  version: 1;
+  deviceId: string;
+  publicKeyPem: string;
+  createdAtMs: number;
+};
+
+// Vault: private key only (encrypted)
+type VaultPrivateKey = {
+  privateKeyPem: string;
+};
+```
+
+**Fire-and-Forget Pattern:**
+
+Sync functions can't await vault operations. Solution: fire-and-forget with error logging:
+
+```typescript
+export function saveAuthProfileStore(payload: AuthProfileStore, agentDir?: string): void {
+  // ... sync JSON save for compatibility ...
+
+  // DILLOBOT: Also save to secure vault (fire-and-forget for sync compatibility)
+  const vaultId = agentDir ? `agent:${agentDir}` : "default";
+  storeAuthProfiles(vaultId, payload).catch((err) => {
+    log.warn("failed to save auth profiles to vault", { err, vaultId });
+  });
+}
+```
+
+**Verification Checklist Items:**
+
+- 54. [ ] `src/security-hardening/vault/vault-manager.ts` exists
+- 55. [ ] `src/security-hardening/vault/aes-fallback.ts` exists
+- 56. [ ] `getMachineId()` function in aes-fallback.ts (passwordless)
+- 57. [ ] `VAULT_KEY_PREFIXES` defined in vault.ts
+- 58. [ ] Auth profiles store uses vault (storeAuthProfiles/loadFromVault)
+- 59. [ ] Device identity uses vault for private keys
+- 60. [ ] `triggerVaultMigration()` called in run-main.ts
+- 61. [ ] `migration.ts` handles PLAINTEXT_PATHS migration
+- 62. [ ] `injectVaultEnvVars()` called in run-main.ts
+- 63. [ ] keytar in package.json optionalDependencies
+- 64. [ ] Vault test files exist (vault-manager.test.ts, aes-fallback.test.ts)
+
+**Why:** Plaintext credential storage is a security risk. API keys, private keys, and tokens must be encrypted at rest. The vault integration provides defense-in-depth without requiring user passwords or complex setup.
