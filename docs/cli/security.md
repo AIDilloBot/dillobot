@@ -45,7 +45,7 @@ openclaw security vault migrate
 
 - **AES-256-GCM encryption**: Authenticated encryption protects credentials at rest
 - **PBKDF2 key derivation**: 310,000 iterations for key derivation
-- **Machine binding**: Key derived from hostname + homedir + platform (credentials won't decrypt elsewhere)
+- **Machine binding**: Environment-derived device fingerprint (credentials won't decrypt elsewhere)
 - **No password required**: Seamless operation without user prompts
 - **Corruption recovery**: Auto-backup and fresh start on corrupted vault files
 - **Channel credentials**: Telegram, Discord, Slack, WhatsApp tokens stored encrypted

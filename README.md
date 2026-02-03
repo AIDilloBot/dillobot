@@ -65,7 +65,7 @@ Credentials are never stored in plaintext. All credentials use AES-256-GCM encry
 |---------|---------|
 | Algorithm | AES-256-GCM (authenticated encryption) |
 | Key derivation | PBKDF2 with 310,000 iterations |
-| Machine binding | Key derived from hostname + homedir + platform |
+| Machine binding | Environment-derived device fingerprint |
 | Unique salt/IV | Per-credential salt and initialization vector |
 | Corruption recovery | Auto-backup and recovery from corrupted vault files |
 

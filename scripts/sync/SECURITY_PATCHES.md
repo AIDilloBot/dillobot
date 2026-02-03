@@ -1305,7 +1305,7 @@ await fs.mkdir(memoryDir, { recursive: true });
 │                     Vault Encryption                        │
 ├─────────────────────────────────────────────────────────────┤
 │  AES-256-GCM with PBKDF2 key derivation (310,000 iter)     │
-│  Machine-derived key (hostname + homedir + platform hash)   │
+│  Environment-derived device fingerprint                     │
 │  Credentials tied to this machine, no password needed       │
 └─────────────────────────────────────────────────────────────┘
 ```
