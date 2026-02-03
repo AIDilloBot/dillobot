@@ -29,7 +29,7 @@ const DEFAULT_CONNECTION_POLICY: ConnectionPolicyConfig = {
  * Default credential policy configuration.
  */
 const DEFAULT_CREDENTIAL_POLICY: CredentialPolicyConfig = {
-  vaultBackend: "auto",
+  vaultBackend: "aes-fallback",
   allowPlaintextFallback: false,
   keyDerivationIterations: 310000,
 };

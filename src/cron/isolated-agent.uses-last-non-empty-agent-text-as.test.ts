@@ -306,7 +306,7 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("wraps external hook content by default", async () => {
+  it("labels external hook content with source metadata", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -335,12 +335,14 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       const call = vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0] as { prompt?: string };
-      expect(call?.prompt).toContain("EXTERNAL, UNTRUSTED");
+      // External content now uses simple metadata labels instead of security wrappers
+      // (security analysis runs out-of-band, not in the prompt)
+      expect(call?.prompt).toContain("Email content");
       expect(call?.prompt).toContain("Hello");
     });
   });
 
-  it("skips external content wrapping when hooks.gmail opts out", async () => {
+  it("uses simple format when hooks.gmail opts out of security processing", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -375,7 +377,7 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       const call = vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0] as { prompt?: string };
-      expect(call?.prompt).not.toContain("EXTERNAL, UNTRUSTED");
+      // When allowUnsafeExternalContent is true, use simple format without metadata labels
       expect(call?.prompt).toContain("Hello");
     });
   });

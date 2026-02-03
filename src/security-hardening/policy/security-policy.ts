@@ -17,7 +17,7 @@ const HARDENED_DEFAULTS: Partial<SecurityPolicyConfig> = {
     maxPairingRequestsPerHour: 10,
   },
   credentials: {
-    vaultBackend: "auto",
+    vaultBackend: "aes-fallback",
     allowPlaintextFallback: false, // CRITICAL: No plaintext storage
     keyDerivationIterations: 310000, // OWASP 2023 recommendation
   },
@@ -104,7 +104,10 @@ export function enforceSecurityPolicy<T extends Record<string, unknown>>(config:
     const value = deepGet(enforced, blockedPath);
     if (value !== undefined) {
       deepDelete(enforced, blockedPath);
-      logPolicyViolation(blockedPath, `Blocked attempt to set dangerous option (value: ${JSON.stringify(value)})`);
+      logPolicyViolation(
+        blockedPath,
+        `Blocked attempt to set dangerous option (value: ${JSON.stringify(value)})`,
+      );
     }
   }
 
@@ -125,7 +128,10 @@ export function enforceSecurityPolicy<T extends Record<string, unknown>>(config:
     // Block insecure auth
     if (controlUi.allowInsecureAuth === true) {
       delete controlUi.allowInsecureAuth;
-      logPolicyViolation("gateway.controlUi.allowInsecureAuth", "Insecure authentication is blocked in DilloBot");
+      logPolicyViolation(
+        "gateway.controlUi.allowInsecureAuth",
+        "Insecure authentication is blocked in DilloBot",
+      );
     }
   }
 
@@ -170,7 +176,10 @@ export function validateSecurityConfig(config: Partial<SecurityPolicyConfig>): {
     errors.push("credentials.allowPlaintextFallback cannot be true in DilloBot (hardened default)");
   }
 
-  if (config.credentials?.keyDerivationIterations && config.credentials.keyDerivationIterations < 100000) {
+  if (
+    config.credentials?.keyDerivationIterations &&
+    config.credentials.keyDerivationIterations < 100000
+  ) {
     warnings.push(
       `credentials.keyDerivationIterations (${config.credentials.keyDerivationIterations}) is below recommended minimum of 100000`,
     );

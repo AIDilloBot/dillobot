@@ -15,8 +15,8 @@ let initPromise: Promise<SecureVault> | null = null;
 /**
  * Get the global vault instance.
  *
- * Lazily initializes the vault on first access. Uses OS keychain when available,
- * falls back to AES-256-GCM encrypted file with machine-derived key.
+ * Lazily initializes the vault on first access. Uses AES-256-GCM encrypted
+ * file with machine-derived key (no password required).
  */
 export async function getVault(): Promise<SecureVault> {
   if (vaultInstance) {
@@ -27,7 +27,7 @@ export async function getVault(): Promise<SecureVault> {
     return initPromise;
   }
 
-  initPromise = createVault("auto").then((vault) => {
+  initPromise = createVault().then((vault) => {
     vaultInstance = vault;
     return vault;
   });
