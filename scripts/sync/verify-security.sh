@@ -467,6 +467,22 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
+# Check 11b: MEMORY.md auto-creation in workspace
+if grep -q "memoryTemplate.*loadTemplate.*MEMORY" src/agents/workspace.ts 2>/dev/null; then
+    echo "✅ MEMORY.md auto-created in ensureAgentWorkspace"
+else
+    echo "❌ CRITICAL: MEMORY.md not auto-created in workspace.ts!"
+    echo "   New users won't have MEMORY.md file."
+    ERRORS=$((ERRORS + 1))
+fi
+
+if [ -f "docs/reference/templates/MEMORY.md" ]; then
+    echo "✅ MEMORY.md template exists"
+else
+    echo "❌ CRITICAL: MEMORY.md template missing from docs/reference/templates/"
+    ERRORS=$((ERRORS + 1))
+fi
+
 # Check 12: DilloBot branding (not OpenClaw)
 echo ""
 echo "Checking DilloBot branding..."

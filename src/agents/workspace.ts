@@ -134,6 +134,7 @@ export async function ensureAgentWorkspace(params?: {
   userPath?: string;
   heartbeatPath?: string;
   bootstrapPath?: string;
+  memoryPath?: string;
 }> {
   const rawDir = params?.dir?.trim() ? params.dir.trim() : DEFAULT_AGENT_WORKSPACE_DIR;
   const dir = resolveUserPath(rawDir);
@@ -150,6 +151,8 @@ export async function ensureAgentWorkspace(params?: {
   const userPath = path.join(dir, DEFAULT_USER_FILENAME);
   const heartbeatPath = path.join(dir, DEFAULT_HEARTBEAT_FILENAME);
   const bootstrapPath = path.join(dir, DEFAULT_BOOTSTRAP_FILENAME);
+  const memoryPath = path.join(dir, DEFAULT_MEMORY_FILENAME);
+  const memoryDir = path.join(dir, "memory");
 
   const isBrandNewWorkspace = await (async () => {
     const paths = [agentsPath, soulPath, toolsPath, identityPath, userPath, heartbeatPath];
@@ -173,6 +176,7 @@ export async function ensureAgentWorkspace(params?: {
   const userTemplate = await loadTemplate(DEFAULT_USER_FILENAME);
   const heartbeatTemplate = await loadTemplate(DEFAULT_HEARTBEAT_FILENAME);
   const bootstrapTemplate = await loadTemplate(DEFAULT_BOOTSTRAP_FILENAME);
+  const memoryTemplate = await loadTemplate(DEFAULT_MEMORY_FILENAME);
 
   await writeFileIfMissing(agentsPath, agentsTemplate);
   await writeFileIfMissing(soulPath, soulTemplate);
@@ -180,6 +184,10 @@ export async function ensureAgentWorkspace(params?: {
   await writeFileIfMissing(identityPath, identityTemplate);
   await writeFileIfMissing(userPath, userTemplate);
   await writeFileIfMissing(heartbeatPath, heartbeatTemplate);
+  // DILLOBOT: Create MEMORY.md for long-term memory
+  await writeFileIfMissing(memoryPath, memoryTemplate);
+  // DILLOBOT: Create memory/ directory for daily logs
+  await fs.mkdir(memoryDir, { recursive: true });
   if (isBrandNewWorkspace) {
     await writeFileIfMissing(bootstrapPath, bootstrapTemplate);
   }
@@ -194,6 +202,7 @@ export async function ensureAgentWorkspace(params?: {
     userPath,
     heartbeatPath,
     bootstrapPath,
+    memoryPath,
   };
 }
 

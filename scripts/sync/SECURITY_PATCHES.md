@@ -618,6 +618,9 @@ User's `~/.openclaw/openclaw.json` should have:
 - 48. [ ] "At Session Start — DO THIS FIRST" subsection with explicit read instructions
 - 49. [ ] "Before Answering Questions — MANDATORY" subsection with memory_search requirement
 - 50. [ ] "Do NOT skip this" imperative instruction present
+- 51. [ ] `docs/reference/templates/MEMORY.md` template exists
+- 52. [ ] MEMORY.md auto-created in `ensureAgentWorkspace()` (workspace.ts)
+- 53. [ ] memory/ directory auto-created in `ensureAgentWorkspace()` (workspace.ts)
 
 ---
 
@@ -1060,3 +1063,39 @@ partialMessage.stopReason = "stop";
 - Check "At Session Start — DO THIS FIRST" subsection exists
 - Check "Before Answering Questions — MANDATORY" subsection exists
 - Check "Do NOT skip this" instruction is present
+
+---
+
+### 24. MEMORY.md Auto-Creation in Workspace
+
+**Purpose:** Ensure MEMORY.md exists for new users so the memory system works out of the box.
+
+**Files:**
+- `docs/reference/templates/MEMORY.md` — Template for new workspaces
+- `src/agents/workspace.ts` — Creates MEMORY.md in ensureAgentWorkspace
+
+**Changes in `ensureAgentWorkspace()`:**
+
+```typescript
+const memoryPath = path.join(dir, DEFAULT_MEMORY_FILENAME);
+const memoryDir = path.join(dir, "memory");
+
+// ... template loading ...
+const memoryTemplate = await loadTemplate(DEFAULT_MEMORY_FILENAME);
+
+// ... file creation ...
+// DILLOBOT: Create MEMORY.md for long-term memory
+await writeFileIfMissing(memoryPath, memoryTemplate);
+// DILLOBOT: Create memory/ directory for daily logs
+await fs.mkdir(memoryDir, { recursive: true });
+```
+
+**Also updated:** `src/agents/sandbox/workspace.ts` — Seeds MEMORY.md when copying workspace
+
+**Why:** Without this, new users have no MEMORY.md file, so the mandatory memory system in the system prompt has nothing to read. The bot admits it should use memory but can't because the file doesn't exist.
+
+**Verification:**
+- Check `docs/reference/templates/MEMORY.md` exists
+- Check `memoryTemplate = await loadTemplate(DEFAULT_MEMORY_FILENAME)` in workspace.ts
+- Check `writeFileIfMissing(memoryPath, memoryTemplate)` in workspace.ts
+- Check `fs.mkdir(memoryDir, { recursive: true })` creates memory/ directory
