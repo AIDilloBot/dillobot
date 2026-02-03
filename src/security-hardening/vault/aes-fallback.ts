@@ -162,15 +162,55 @@ export class AesFallbackVault implements SecureVault {
 
   /**
    * Load the vault file.
+   *
+   * Handles corrupted JSON gracefully by backing up the corrupted file
+   * and starting fresh. This prevents vault corruption from blocking
+   * all credential operations.
    */
   private async loadVault(): Promise<VaultFile> {
     try {
       const data = await fs.readFile(this.vaultPath, "utf-8");
-      return JSON.parse(data) as VaultFile;
+      const parsed = JSON.parse(data) as VaultFile;
+
+      // Validate basic structure
+      if (!parsed || typeof parsed !== "object" || !parsed.entries) {
+        throw new Error("Invalid vault structure");
+      }
+
+      return parsed;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      const err = error as NodeJS.ErrnoException;
+
+      // File doesn't exist - return empty vault
+      if (err.code === "ENOENT") {
         return { version: 1, entries: {} };
       }
+
+      // JSON parse error or invalid structure - vault is corrupted
+      if (err instanceof SyntaxError || err.message === "Invalid vault structure") {
+        console.warn(
+          `[DilloBot Vault] Vault file corrupted, backing up and starting fresh: ${err.message}`,
+        );
+
+        // Backup corrupted file
+        try {
+          const backupPath = `${this.vaultPath}.corrupted.${Date.now()}`;
+          await fs.rename(this.vaultPath, backupPath);
+          console.warn(`[DilloBot Vault] Corrupted vault backed up to: ${backupPath}`);
+        } catch {
+          // If backup fails, just delete the corrupted file
+          try {
+            await fs.unlink(this.vaultPath);
+          } catch {
+            // Ignore deletion errors
+          }
+        }
+
+        // Return empty vault to start fresh
+        return { version: 1, entries: {} };
+      }
+
+      // Other errors (permissions, etc.) should still throw
       throw error;
     }
   }

@@ -1102,18 +1102,19 @@ await fs.mkdir(memoryDir, { recursive: true });
 
 ---
 
-### 25. OS Keychain Vault Integration
+### 25. Encrypted Vault Integration
 
-**Purpose:** Store all sensitive credentials (API keys, private keys, auth tokens) in encrypted storage instead of plaintext JSON files. Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) with an AES-256-GCM encrypted file fallback. **No password required from user.**
+**Purpose:** Store all sensitive credentials (API keys, private keys, auth tokens) in encrypted storage instead of plaintext JSON files. Uses AES-256-GCM encryption with machine-derived key. **No password required from user.**
 
 **Architecture:**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Vault Hierarchy                         │
+│                     Vault Encryption                        │
 ├─────────────────────────────────────────────────────────────┤
-│  1. OS Keychain (keytar)     - Preferred when available     │
-│  2. AES-256-GCM File         - Fallback with machine key    │
+│  AES-256-GCM with PBKDF2 key derivation (310,000 iter)     │
+│  Machine-derived key (hostname + homedir + platform hash)   │
+│  Credentials tied to this machine, no password needed       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1124,7 +1125,6 @@ await fs.mkdir(memoryDir, { recursive: true });
 | `src/security-hardening/vault/vault.ts` | Vault factory, key prefixes, `buildVaultKey()` |
 | `src/security-hardening/vault/vault-manager.ts` | Singleton manager with typed helpers |
 | `src/security-hardening/vault/aes-fallback.ts` | AES-256-GCM encrypted file vault |
-| `src/security-hardening/vault/keytar-vault.ts` | OS keychain backend via keytar |
 | `src/security-hardening/vault/migration.ts` | Plaintext → vault migration |
 | `src/security-hardening/types.ts` | `SecureVault` interface |
 
@@ -1160,6 +1160,16 @@ This ensures:
 - No user prompts or password management
 
 Environment variables can override: `DILLOBOT_VAULT_PASSWORD` or `OPENCLAW_VAULT_PASSWORD`
+
+**Corruption Recovery:**
+
+If the vault file becomes corrupted (invalid JSON, partial write), the vault:
+1. Logs a warning with the error message
+2. Creates a timestamped backup: `vault.enc.corrupted.{timestamp}`
+3. Starts fresh with an empty vault
+4. Continues operation without blocking
+
+This prevents vault corruption from breaking all credential operations.
 
 **Migration from Plaintext:**
 
@@ -1244,8 +1254,7 @@ export function saveAuthProfileStore(payload: AuthProfileStore, agentDir?: strin
 - 60. [ ] `triggerVaultMigration()` called in run-main.ts
 - 61. [ ] `migration.ts` handles PLAINTEXT_PATHS migration
 - 62. [ ] `injectVaultEnvVars()` called in run-main.ts
-- 63. [ ] keytar in package.json optionalDependencies
-- 64. [ ] Vault test files exist (vault-manager.test.ts, aes-fallback.test.ts)
+- 63. [ ] Vault test files exist (vault-manager.test.ts, aes-fallback.test.ts)
 
 **Why:** Plaintext credential storage is a security risk. API keys, private keys, and tokens must be encrypted at rest. The vault integration provides defense-in-depth without requiring user passwords or complex setup.
 

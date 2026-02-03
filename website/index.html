@@ -478,23 +478,23 @@
                         </svg>
                     </div>
                     <h3>Encrypted Credential Vault</h3>
-                    <p>Credentials never touch plaintext. Platform-native secure storage with AES-256-GCM fallback.</p>
+                    <p>Credentials never touch plaintext. AES-256-GCM encryption with machine-derived key. No password required.</p>
                     <div class="feature-details">
                         <div class="detail-row">
-                            <span class="detail-label">macOS</span>
-                            <span class="detail-value">Keychain (hardware-backed)</span>
+                            <span class="detail-label">Algorithm</span>
+                            <span class="detail-value">AES-256-GCM (authenticated encryption)</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">Windows</span>
-                            <span class="detail-value">Credential Manager (DPAPI)</span>
+                            <span class="detail-label">Key Derivation</span>
+                            <span class="detail-value">PBKDF2 with 310,000 iterations</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">Linux</span>
-                            <span class="detail-value">Secret Service (libsecret)</span>
+                            <span class="detail-label">Machine Binding</span>
+                            <span class="detail-value">Key tied to hostname + homedir + platform</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">Fallback</span>
-                            <span class="detail-value">AES-256-GCM + PBKDF2 (310k iterations)</span>
+                            <span class="detail-label">Recovery</span>
+                            <span class="detail-value">Auto-backup on corruption, fresh start</span>
                         </div>
                     </div>
                 </div>
@@ -640,7 +640,7 @@
                                 <span class="status status-bad">Plaintext files</span>
                             </td>
                             <td class="dillobot-col">
-                                <span class="status status-good">Encrypted vault (OS keychain)</span>
+                                <span class="status status-good">Encrypted vault (AES-256-GCM)</span>
                             </td>
                         </tr>
                         <tr>

@@ -8,12 +8,11 @@
 // Vault Types
 // =============================================================================
 
-export type VaultBackend =
-  | "keychain"
-  | "credential-manager"
-  | "secret-service"
-  | "aes-fallback"
-  | "auto";
+/**
+ * Vault backend type.
+ * Currently only AES-256-GCM is supported.
+ */
+export type VaultBackend = "aes-fallback";
 
 export interface SecureVault {
   /** Store a credential with automatic encryption */

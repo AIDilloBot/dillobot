@@ -638,9 +638,9 @@ else
     WARNINGS=$((WARNINGS + 1))
 fi
 
-# Check 15: OS Keychain Vault Integration
+# Check 15: Encrypted Vault Integration
 echo ""
-echo "Checking OS keychain vault integration..."
+echo "Checking encrypted vault integration..."
 
 # Check vault-manager.ts exists
 if [ -f "src/security-hardening/vault/vault-manager.ts" ]; then
@@ -725,13 +725,7 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
-# Check keytar in optionalDependencies
-if grep -q '"keytar"' package.json 2>/dev/null; then
-    echo "✅ keytar in package.json (optional dependency)"
-else
-    echo "⚠️  WARNING: keytar not in package.json - OS keychain not available"
-    WARNINGS=$((WARNINGS + 1))
-fi
+# Note: keytar removed - using AES-256-GCM vault only (simpler, no native deps)
 
 # Check vault tests exist
 if [ -f "src/security-hardening/vault/vault-manager.test.ts" ] && [ -f "src/security-hardening/vault/aes-fallback.test.ts" ]; then

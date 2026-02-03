@@ -59,20 +59,20 @@ All connections require cryptographic challenge-response pairing — even local 
 
 ### 2. Encrypted Credential Vault
 
-Credentials are never stored in plaintext. Platform-specific secure storage:
+Credentials are never stored in plaintext. All credentials use AES-256-GCM encryption with a machine-derived key (no password required):
 
-| Platform | Backend | Encryption |
-|----------|---------|------------|
-| macOS | Keychain | Hardware-backed |
-| Windows | Credential Manager | DPAPI |
-| Linux | Secret Service (D-Bus) | libsecret |
-| Fallback | Encrypted file | AES-256-GCM |
+| Feature | Details |
+|---------|---------|
+| Algorithm | AES-256-GCM (authenticated encryption) |
+| Key derivation | PBKDF2 with 310,000 iterations |
+| Machine binding | Key derived from hostname + homedir + platform |
+| Unique salt/IV | Per-credential salt and initialization vector |
+| Corruption recovery | Auto-backup and recovery from corrupted vault files |
 
-**AES Fallback Details:**
-- Algorithm: AES-256-GCM (authenticated encryption)
-- Key derivation: PBKDF2 with 310,000 iterations
-- Unique salt and IV per credential
-- Keys can be rotated without re-entering credentials
+**Passwordless operation:** The encryption key is derived from machine identity, so credentials are:
+- Encrypted at rest (can't be read from disk without the key)
+- Tied to this machine (won't decrypt elsewhere)
+- No password prompts or management required
 
 **Auto-migration:** On first run, DilloBot automatically migrates any plaintext credentials from `~/.openclaw/identity/` to the secure vault.
 

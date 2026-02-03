@@ -2,7 +2,7 @@
  * DilloBot Security Hardening Module
  *
  * This module provides security enhancements for OpenClaw:
- * - Encrypted credential vault (OS keychain + AES fallback)
+ * - Encrypted credential vault (AES-256-GCM with machine-derived key)
  * - Prompt injection detection and filtering
  * - LLM-based skill inspection before installation
  * - Security policy enforcement
@@ -20,12 +20,7 @@ export { enforceSecurityPolicy, getHardenedDefaults } from "./policy/security-po
 export { getSecurityPolicyConfig } from "./policy/policy-config.js";
 
 // Credential vault
-export {
-  createVault,
-  getDefaultVaultBackend,
-  VAULT_KEY_PREFIXES,
-  buildVaultKey,
-} from "./vault/vault.js";
+export { createVault, VAULT_KEY_PREFIXES, buildVaultKey } from "./vault/vault.js";
 export {
   migrateToSecureVault,
   isMigrationCompleted,

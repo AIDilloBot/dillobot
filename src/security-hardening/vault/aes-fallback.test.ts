@@ -165,6 +165,50 @@ describe("AesFallbackVault", () => {
       expect(vault.backend).toBe("aes-fallback");
     });
   });
+
+  describe("corrupted vault recovery", () => {
+    it("recovers from corrupted JSON by starting fresh", async () => {
+      // Write corrupted JSON to vault file
+      await fs.mkdir(testDir, { recursive: true });
+      await fs.writeFile(testVaultPath, '{"version":1,"entries":{}}garbage data here', "utf-8");
+
+      const vault = new AesFallbackVault(testVaultPath, "test-password");
+
+      // Should not throw, should recover gracefully
+      const keys = await vault.list();
+      expect(keys).toEqual([]);
+
+      // Should be able to store new data
+      await vault.store("new-key", Buffer.from("new-data"));
+      const retrieved = await vault.retrieve("new-key");
+      expect(retrieved).toEqual(Buffer.from("new-data"));
+    });
+
+    it("recovers from invalid vault structure", async () => {
+      // Write valid JSON but invalid vault structure
+      await fs.mkdir(testDir, { recursive: true });
+      await fs.writeFile(testVaultPath, '{"foo":"bar"}', "utf-8");
+
+      const vault = new AesFallbackVault(testVaultPath, "test-password");
+
+      // Should recover and return empty entries
+      const keys = await vault.list();
+      expect(keys).toEqual([]);
+    });
+
+    it("creates backup of corrupted vault file", async () => {
+      await fs.mkdir(testDir, { recursive: true });
+      await fs.writeFile(testVaultPath, "completely invalid", "utf-8");
+
+      const vault = new AesFallbackVault(testVaultPath, "test-password");
+      await vault.list(); // Triggers load and recovery
+
+      // Check that a backup file was created
+      const files = await fs.readdir(testDir);
+      const backupFiles = files.filter((f) => f.includes(".corrupted."));
+      expect(backupFiles.length).toBeGreaterThan(0);
+    });
+  });
 });
 
 describe("secureDelete", () => {
