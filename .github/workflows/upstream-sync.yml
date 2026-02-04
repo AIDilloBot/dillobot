@@ -51,10 +51,11 @@ jobs:
   sync-with-claude-code:
     name: Sync with Claude Code Analysis
     needs: check-upstream
-    if: needs.check-upstream.outputs.has_updates == 'true' || github.event.inputs.force_sync == 'true'
-    # IMPORTANT: Requires self-hosted runner with Claude Code CLI authenticated
-    # Or use GitHub-hosted runner with Claude Code credentials configured
-    runs-on: self-hosted  # Change to 'ubuntu-latest' if using credential injection
+    # DISABLED: Claude Code sync requires local execution with your subscription
+    # The local-sync-reminder job will create an issue when updates are available
+    # Run locally with: npm run dillobot:sync
+    if: false  # Disabled - run sync locally instead
+    runs-on: self-hosted
 
     steps:
       - name: Checkout DilloBot
@@ -181,8 +182,9 @@ jobs:
 
   verify-security:
     name: Verify Security Patches
-    needs: sync-with-claude-code
-    if: always() && needs.check-upstream.outputs.has_updates == 'true'
+    needs: check-upstream
+    # Always verify security patches are intact on the current branch
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
@@ -192,8 +194,8 @@ jobs:
       - name: Verify security patches
         run: bash scripts/sync/verify-security.sh
 
-  # Alternative: Run on your local machine via cron
-  # This job just creates a reminder if you prefer local execution
+  # Create reminder when upstream has updates
+  # Run sync locally with: npm run dillobot:sync
   local-sync-reminder:
     name: Local Sync Reminder
     needs: check-upstream
