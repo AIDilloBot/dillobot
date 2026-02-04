@@ -318,6 +318,26 @@ main() {
 
     print_banner
 
+    # OpenClaw compatibility warning
+    if [[ -d "$HOME/.openclaw" ]]; then
+        echo -e "${WARN}${BOLD}WARNING: Existing ~/.openclaw folder detected${NC}"
+        echo -e "${WARN}DilloBot uses the same ~/.openclaw folder as OpenClaw.${NC}"
+        echo -e "${WARN}If you have existing OpenClaw agent data you want to keep,${NC}"
+        echo -e "${WARN}back up your ~/.openclaw folder before proceeding:${NC}"
+        echo ""
+        echo -e "  ${INFO}cp -r ~/.openclaw ~/.openclaw.backup${NC}"
+        echo ""
+        if [[ -t 0 && -t 1 ]]; then
+            read -p "Continue installation? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${MUTED}Installation cancelled. Back up your data and try again.${NC}"
+                exit 0
+            fi
+        fi
+        echo ""
+    fi
+
     if [[ "$verify_only" == "1" ]]; then
         run_verify
         exit 0
