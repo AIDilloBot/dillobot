@@ -115,6 +115,7 @@ function formatElapsed(ms: number): string {
 
 /**
  * Run Claude Code CLI with a prompt and get the response
+ * Pipes prompt via stdin to avoid shell escaping issues with special characters
  */
 async function askClaude(prompt: string, options?: {
   allowedTools?: string[];
@@ -133,12 +134,14 @@ async function askClaude(prompt: string, options?: {
       args.push("--max-turns", String(options.maxTurns));
     }
 
-    // Add the prompt (must be last, as positional argument)
-    args.push(prompt);
-
+    // Spawn claude and pipe prompt via stdin
     const claude = spawn("claude", args, {
       stdio: ["pipe", "pipe", "pipe"],
     });
+
+    // Write prompt to stdin (avoids shell escaping issues)
+    claude.stdin.write(prompt);
+    claude.stdin.end();
 
     const startTime = Date.now();
     let stdout = "";
