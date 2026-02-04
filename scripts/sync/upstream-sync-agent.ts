@@ -101,6 +101,19 @@ function isClaudeCodeAvailable(): boolean {
 }
 
 /**
+ * Format elapsed time in human-readable format
+ */
+function formatElapsed(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+/**
  * Run Claude Code CLI with a prompt and get the response
  */
 async function askClaude(prompt: string, options?: {
@@ -127,28 +140,77 @@ async function askClaude(prompt: string, options?: {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
+    const startTime = Date.now();
     let stdout = "";
     let stderr = "";
+    let lastActivity = Date.now();
+    let bytesReceived = 0;
+
+    // Progress indicator
+    const progressChars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let progressIndex = 0;
+
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const sinceActivity = Date.now() - lastActivity;
+      const spinner = progressChars[progressIndex % progressChars.length];
+      progressIndex++;
+
+      // Build status line
+      let status = `   ${spinner} Claude Code analyzing... (${formatElapsed(elapsed)})`;
+      if (bytesReceived > 0) {
+        status += ` | ${bytesReceived} bytes received`;
+      }
+      if (sinceActivity > 10000) {
+        status += ` | waiting for API response...`;
+      }
+
+      // Clear line and write status
+      process.stdout.write(`\r${status.padEnd(80)}`);
+    }, 250);
 
     claude.stdout.on("data", (data) => {
-      stdout += data.toString();
+      const chunk = data.toString();
+      stdout += chunk;
+      bytesReceived += chunk.length;
+      lastActivity = Date.now();
     });
 
     claude.stderr.on("data", (data) => {
-      stderr += data.toString();
+      const chunk = data.toString();
+      stderr += chunk;
+      lastActivity = Date.now();
+      // Show any error output immediately
+      if (chunk.trim()) {
+        process.stdout.write(`\r   ⚠️  ${chunk.trim().slice(0, 60).padEnd(70)}\n`);
+      }
     });
 
     claude.on("close", (code) => {
+      clearInterval(progressInterval);
+      const elapsed = Date.now() - startTime;
+      // Clear the progress line
+      process.stdout.write(`\r${" ".repeat(80)}\r`);
+
       if (code === 0) {
+        console.log(`   ✅ Claude Code completed in ${formatElapsed(elapsed)}`);
         resolve(stdout.trim());
       } else {
+        console.log(`   ❌ Claude Code failed after ${formatElapsed(elapsed)}`);
         reject(new Error(`Claude Code exited with code ${code}: ${stderr}`));
       }
     });
 
     claude.on("error", (err) => {
+      clearInterval(progressInterval);
+      process.stdout.write(`\r${" ".repeat(80)}\r`);
+      console.log(`   ❌ Failed to start Claude Code: ${err.message}`);
       reject(err);
     });
+
+    // Log process info for debugging
+    console.log(`   📍 Started Claude Code (PID: ${claude.pid})`);
+    console.log(`   💡 To check status: ps aux | grep ${claude.pid}`);
   });
 }
 
@@ -309,12 +371,16 @@ Respond with a JSON object (no markdown, just raw JSON):
   }
 }`;
 
-  console.log("   Sending to Claude Code for analysis...");
+  console.log("   📤 Sending to Claude Code for merge analysis...");
+  console.log(`   📊 Prompt size: ${Math.round(prompt.length / 1024)}KB | Security files: ${changedSecurityFiles.length} | Diff size: ${Math.round(upstreamDiff.length / 1024)}KB`);
+  console.log("");
 
   const response = await askClaude(prompt, {
     allowedTools: ["Read", "Grep", "Glob"],  // Allow Claude to read files if needed
     maxTurns: 3,
   });
+
+  console.log(`   📥 Response received: ${Math.round(response.length / 1024)}KB`);
 
   // Parse JSON from response (handle potential markdown wrapping)
   let jsonStr = response;
@@ -582,7 +648,9 @@ async function applyResolution(file: string, content: string): Promise<void> {
  * Main sync function
  */
 async function syncWithUpstream(): Promise<SyncResult> {
-  console.log("🔄 DilloBot Upstream Sync Agent (Claude Code)\n");
+  const syncStartTime = Date.now();
+  console.log("🔄 DilloBot Upstream Sync Agent (Claude Code)");
+  console.log(`   Started at: ${new Date().toLocaleTimeString()}\n`);
 
   // Check Claude Code CLI is available
   if (!isClaudeCodeAvailable()) {
@@ -1010,6 +1078,7 @@ async function main() {
     // Print summary
     console.log("\n" + "=".repeat(50));
     console.log(result.success ? "✅ SYNC COMPLETE" : "⚠️ ACTION REQUIRED");
+    console.log(`   Finished at: ${new Date().toLocaleTimeString()}`);
     console.log("=".repeat(50));
 
     // Exit with appropriate code
