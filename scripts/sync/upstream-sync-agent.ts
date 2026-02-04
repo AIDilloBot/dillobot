@@ -396,7 +396,6 @@ Respond with a JSON object (no markdown, just raw JSON):
 
   const response = await askClaude(prompt, {
     allowedTools: ["Read", "Grep", "Glob"],  // Allow Claude to read files if needed
-    maxTurns: 3,
   });
 
   console.log(`   📥 Response received: ${Math.round(response.length / 1024)}KB`);
