@@ -1,7 +1,7 @@
 {
   "name": "dillobot",
-  "version": "2026.1.30",
-  "description": "WhatsApp gateway CLI (Baileys web) with Pi RPC agent",
+  "version": "2026.2.4",
+  "description": "Security-hardened fork of OpenClaw with encrypted credentials, injection protection, and mandatory auth",
   "keywords": [],
   "license": "MIT",
   "author": "",
