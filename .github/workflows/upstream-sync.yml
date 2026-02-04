@@ -15,6 +15,11 @@ env:
   UPSTREAM_REPO: openclaw/openclaw
   UPSTREAM_BRANCH: main
 
+# Required permissions for creating issues and comments
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   check-upstream:
     name: Check for Upstream Updates
