@@ -216,6 +216,21 @@ async function checkSecurityFileChanges(): Promise<string[]> {
 }
 
 /**
+ * Create a timestamped backup branch before sync
+ */
+function createBackupBranch(): string | null {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const branchName = `backup-before-sync-${timestamp}`;
+    run(`git branch ${branchName}`);
+    return branchName;
+  } catch (error) {
+    console.log("⚠️  Could not create backup branch:", error);
+    return null;
+  }
+}
+
+/**
  * Check if upstream is trying to add blocked files
  */
 async function checkBlockedFileChanges(): Promise<string[]> {
@@ -598,6 +613,13 @@ async function syncWithUpstream(): Promise<SyncResult> {
   console.log(`📦 Found ${updates.commitCount} new commits from upstream:\n`);
   console.log(updates.summary);
   console.log("");
+
+  // Create timestamped backup branch before any merge operations
+  const backupBranch = createBackupBranch();
+  if (backupBranch) {
+    console.log(`💾 Backup branch created: ${backupBranch}`);
+    console.log(`   To restore if needed: git reset --hard ${backupBranch}\n`);
+  }
 
   // Step 2: Analyze changes
   console.log("🔍 Analyzing upstream changes...");
