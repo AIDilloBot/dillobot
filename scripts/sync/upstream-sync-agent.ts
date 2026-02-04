@@ -115,21 +115,17 @@ function formatElapsed(ms: number): string {
 
 /**
  * Run Claude Code CLI with a prompt and get the response
- * Uses temp file to avoid shell escaping issues with special characters
+ * Spawns claude directly (no shell) to avoid backtick/variable interpretation issues
  */
 async function askClaude(prompt: string, options?: {
   allowedTools?: string[];
   maxTurns?: number;
 }): Promise<string> {
-  // Write prompt to temp file to avoid shell escaping issues
+  // Save prompt to temp file for debugging (optional manual testing)
   const tempDir = process.env.TMPDIR || "/tmp";
   const tempFile = path.join(tempDir, `dillobot-sync-prompt-${Date.now()}.txt`);
   await fs.writeFile(tempFile, prompt, "utf-8");
-
-  // Verify file was written
-  const stats = await fs.stat(tempFile);
-  console.log(`   📁 Prompt saved to: ${tempFile} (${Math.round(stats.size / 1024)}KB)`);
-  console.log(`   💡 To test manually: claude --print --max-turns 3 -- "$(cat '${tempFile}')"`);
+  console.log(`   📁 Prompt saved to: ${tempFile} (${Math.round(prompt.length / 1024)}KB)`);
 
   return new Promise((resolve, reject) => {
     const claudeArgs: string[] = [
@@ -144,11 +140,9 @@ async function askClaude(prompt: string, options?: {
       claudeArgs.push("--max-turns", String(options.maxTurns));
     }
 
-    // Use bash to read prompt into variable, then pass to claude
-    // This handles special characters (backticks, $, etc.) properly
-    const shellCmd = `prompt=$(cat '${tempFile}') && claude ${claudeArgs.join(" ")} -- "$prompt"`;
-
-    const proc = spawn("bash", ["-c", shellCmd], {
+    // Spawn claude directly (no shell) - this passes the prompt as a raw argument
+    // without any shell interpretation of backticks, $, etc.
+    const proc = spawn("claude", [...claudeArgs, "--", prompt], {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
