@@ -28,6 +28,13 @@ const UPSTREAM_REPO = "https://github.com/openclaw/openclaw.git";
 const UPSTREAM_BRANCH = "main";
 const SECURITY_PATCHES_DOC = path.join(__dirname, "SECURITY_PATCHES.md");
 
+// Files that must NEVER be merged from upstream (security risk)
+const BLOCKED_FILES = [
+  "src/hooks/soul-evil.ts",
+  "src/hooks/soul-evil.test.ts",
+  "docs/hooks/soul-evil.md",
+];
+
 // Files that contain DilloBot security modifications
 const SECURITY_CRITICAL_FILES = [
   "src/gateway/server/ws-connection/message-handler.ts",
@@ -206,6 +213,33 @@ async function getChangedFiles(): Promise<string[]> {
 async function checkSecurityFileChanges(): Promise<string[]> {
   const changedFiles = await getChangedFiles();
   return SECURITY_CRITICAL_FILES.filter((f) => changedFiles.includes(f));
+}
+
+/**
+ * Check if upstream is trying to add blocked files
+ */
+async function checkBlockedFileChanges(): Promise<string[]> {
+  const changedFiles = await getChangedFiles();
+  return BLOCKED_FILES.filter((f) => changedFiles.includes(f));
+}
+
+/**
+ * Remove blocked files if they exist after merge
+ */
+async function removeBlockedFiles(): Promise<string[]> {
+  const removed: string[] = [];
+  for (const file of BLOCKED_FILES) {
+    try {
+      await fs.access(file);
+      await fs.unlink(file);
+      run(`git add ${file}`, { ignoreError: true });
+      removed.push(file);
+      console.log(`   🗑️  Removed blocked file: ${file}`);
+    } catch {
+      // File doesn't exist, which is good
+    }
+  }
+  return removed;
 }
 
 /**
@@ -580,6 +614,8 @@ async function syncWithUpstream(): Promise<SyncResult> {
     const mergeResult = await attemptAutoMerge();
 
     if (mergeResult.success) {
+      // Remove any blocked files that may have been merged
+      const blockedRemoved = await removeBlockedFiles();
       const verification = await verifySecurityPatches();
       if (verification.valid) {
         // Update README, website, install script, and version file, then amend the merge commit
@@ -587,14 +623,14 @@ async function syncWithUpstream(): Promise<SyncResult> {
         const websiteUpdated = await updateWebsiteVersion();
         const installCopied = await copyInstallScripts();
         const versionFileUpdated = await updateDilloBotVersionFile();
-        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated) {
+        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated || blockedRemoved.length > 0) {
           run('git commit --amend --no-edit');
         }
         console.log("✅ Simple merge successful! Security patches intact.\n");
         return {
           success: true,
           action: "auto-merged",
-          summary: `Successfully merged ${updates.commitCount} upstream commits (no conflicts).`,
+          summary: `Successfully merged ${updates.commitCount} upstream commits (no conflicts).${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}`,
           upstreamChanges: updates.summary,
         };
       }
@@ -622,7 +658,8 @@ async function syncWithUpstream(): Promise<SyncResult> {
     const mergeResult = await attemptAutoMerge();
 
     if (mergeResult.success) {
-      // Simple merge worked
+      // Simple merge worked - remove any blocked files
+      const blockedRemoved = await removeBlockedFiles();
       const verification = await verifySecurityPatches();
       if (verification.valid) {
         // Update README, website, install script, and version file, then amend the merge commit
@@ -630,14 +667,14 @@ async function syncWithUpstream(): Promise<SyncResult> {
         const websiteUpdated = await updateWebsiteVersion();
         const installCopied = await copyInstallScripts();
         const versionFileUpdated = await updateDilloBotVersionFile();
-        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated) {
+        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated || blockedRemoved.length > 0) {
           run('git commit --amend --no-edit');
         }
         console.log("✅ Merge successful! All security patches intact.\n");
         return {
           success: true,
           action: "auto-merged",
-          summary: `Successfully merged ${updates.commitCount} upstream commits.`,
+          summary: `Successfully merged ${updates.commitCount} upstream commits.${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}`,
           upstreamChanges: updates.summary,
         };
       } else {
@@ -666,7 +703,8 @@ async function syncWithUpstream(): Promise<SyncResult> {
         .map((line) => line.slice(3).trim());
 
       if (remainingConflicts.length === 0) {
-        // Verify and commit
+        // Remove any blocked files and verify
+        const blockedRemoved = await removeBlockedFiles();
         const verification = await verifySecurityPatches();
         if (verification.valid) {
           // Update README, website, install script, and version file before committing
@@ -679,7 +717,7 @@ async function syncWithUpstream(): Promise<SyncResult> {
           return {
             success: true,
             action: "auto-merged",
-            summary: `Merged ${updates.commitCount} commits with Claude Code-assisted resolution.`,
+            summary: `Merged ${updates.commitCount} commits with Claude Code-assisted resolution.${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}`,
             appliedPatches: Object.keys(analysis.resolutions),
             upstreamChanges: updates.summary,
           };

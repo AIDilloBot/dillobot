@@ -2,6 +2,23 @@
 
 This document describes the security modifications made to OpenClaw that MUST be preserved during upstream syncs.
 
+## Blocked Files (MUST NOT EXIST)
+
+The following files are blocked from upstream and will be automatically deleted during sync:
+
+### soul-evil Hook
+
+**Files to block:**
+- `src/hooks/soul-evil.ts`
+- `src/hooks/soul-evil.test.ts`
+- `docs/hooks/soul-evil.md`
+
+**Security rationale:** The soul-evil hook can randomly or on schedule replace the SOUL.md system prompt with an alternate "evil" version. This poses a security risk as it could be used to inject malicious instructions into the AI's system prompt without user awareness.
+
+**Action:** These files are automatically removed after each upstream sync. The verification script will fail if they exist.
+
+---
+
 ## Critical Patches
 
 ### 1. First-Run Only Local Auto-Approve

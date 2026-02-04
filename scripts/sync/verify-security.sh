@@ -11,7 +11,41 @@ echo ""
 ERRORS=0
 WARNINGS=0
 
+# Check 0: Blocked hooks (soul-evil must NOT exist)
+echo "Checking blocked hooks..."
+BLOCKED_HOOKS_FOUND=0
+
+if [ -f "src/hooks/soul-evil.ts" ]; then
+    echo "❌ CRITICAL: src/hooks/soul-evil.ts exists - REMOVE IT!"
+    echo "   This hook can hijack the system prompt with malicious content."
+    BLOCKED_HOOKS_FOUND=1
+    ERRORS=$((ERRORS + 1))
+fi
+
+if [ -f "src/hooks/soul-evil.test.ts" ]; then
+    echo "❌ CRITICAL: src/hooks/soul-evil.test.ts exists - REMOVE IT!"
+    BLOCKED_HOOKS_FOUND=1
+    ERRORS=$((ERRORS + 1))
+fi
+
+if [ -f "docs/hooks/soul-evil.md" ]; then
+    echo "❌ CRITICAL: docs/hooks/soul-evil.md exists - REMOVE IT!"
+    BLOCKED_HOOKS_FOUND=1
+    ERRORS=$((ERRORS + 1))
+fi
+
+if grep -rq "soul-evil" src/hooks/bundled/ 2>/dev/null; then
+    echo "❌ CRITICAL: soul-evil referenced in src/hooks/bundled/ - REMOVE IT!"
+    BLOCKED_HOOKS_FOUND=1
+    ERRORS=$((ERRORS + 1))
+fi
+
+if [ $BLOCKED_HOOKS_FOUND -eq 0 ]; then
+    echo "✅ No blocked hooks found (soul-evil removed)"
+fi
+
 # Check 1: First-run only auto-approve
+echo ""
 echo "Checking first-run only auto-approve..."
 if grep -q "isLocalClient && (await isFirstRun())" src/gateway/server/ws-connection/message-handler.ts 2>/dev/null; then
     echo "✅ First-run only auto-approve (isLocalClient && isFirstRun)"
