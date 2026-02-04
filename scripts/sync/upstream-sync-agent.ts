@@ -115,33 +115,47 @@ function formatElapsed(ms: number): string {
 
 /**
  * Run Claude Code CLI with a prompt and get the response
- * Pipes prompt via stdin to avoid shell escaping issues with special characters
+ * Uses temp file to avoid shell escaping issues with special characters
  */
 async function askClaude(prompt: string, options?: {
   allowedTools?: string[];
   maxTurns?: number;
 }): Promise<string> {
+  // Write prompt to temp file to avoid shell escaping issues
+  const tempDir = process.env.TMPDIR || "/tmp";
+  const tempFile = path.join(tempDir, `dillobot-sync-prompt-${Date.now()}.txt`);
+  await fs.writeFile(tempFile, prompt, "utf-8");
+
+  // Verify file was written
+  const stats = await fs.stat(tempFile);
+  console.log(`   📁 Prompt saved to: ${tempFile} (${Math.round(stats.size / 1024)}KB)`);
+  console.log(`   💡 To test manually: claude --print --max-turns 3 -- "$(cat '${tempFile}')"`);
+
   return new Promise((resolve, reject) => {
-    const args = [
+    const claudeArgs: string[] = [
       "--print",  // Non-interactive mode, print response to stdout
     ];
 
     if (options?.allowedTools) {
-      args.push("--allowedTools", options.allowedTools.join(","));
+      claudeArgs.push("--allowedTools", options.allowedTools.join(","));
     }
 
     if (options?.maxTurns) {
-      args.push("--max-turns", String(options.maxTurns));
+      claudeArgs.push("--max-turns", String(options.maxTurns));
     }
 
-    // Spawn claude and pipe prompt via stdin
-    const claude = spawn("claude", args, {
+    // Use bash to read prompt into variable, then pass to claude
+    // This handles special characters (backticks, $, etc.) properly
+    const shellCmd = `prompt=$(cat '${tempFile}') && claude ${claudeArgs.join(" ")} -- "$prompt"`;
+
+    const proc = spawn("bash", ["-c", shellCmd], {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    // Write prompt to stdin (avoids shell escaping issues)
-    claude.stdin.write(prompt);
-    claude.stdin.end();
+    // Cleanup temp file when done
+    const cleanup = () => {
+      fs.unlink(tempFile).catch(() => {});
+    };
 
     const startTime = Date.now();
     let stdout = "";
@@ -172,14 +186,14 @@ async function askClaude(prompt: string, options?: {
       process.stdout.write(`\r${status.padEnd(80)}`);
     }, 250);
 
-    claude.stdout.on("data", (data) => {
+    proc.stdout.on("data", (data) => {
       const chunk = data.toString();
       stdout += chunk;
       bytesReceived += chunk.length;
       lastActivity = Date.now();
     });
 
-    claude.stderr.on("data", (data) => {
+    proc.stderr.on("data", (data) => {
       const chunk = data.toString();
       stderr += chunk;
       lastActivity = Date.now();
@@ -189,8 +203,9 @@ async function askClaude(prompt: string, options?: {
       }
     });
 
-    claude.on("close", (code) => {
+    proc.on("close", (code) => {
       clearInterval(progressInterval);
+      cleanup();
       const elapsed = Date.now() - startTime;
       // Clear the progress line
       process.stdout.write(`\r${" ".repeat(80)}\r`);
@@ -204,16 +219,17 @@ async function askClaude(prompt: string, options?: {
       }
     });
 
-    claude.on("error", (err) => {
+    proc.on("error", (err) => {
       clearInterval(progressInterval);
+      cleanup();
       process.stdout.write(`\r${" ".repeat(80)}\r`);
       console.log(`   ❌ Failed to start Claude Code: ${err.message}`);
       reject(err);
     });
 
     // Log process info for debugging
-    console.log(`   📍 Started Claude Code (PID: ${claude.pid})`);
-    console.log(`   💡 To check status: ps aux | grep ${claude.pid}`);
+    console.log(`   📍 Started shell process (PID: ${proc.pid})`);
+    console.log(`   💡 To check Claude: ps aux | grep claude`);
   });
 }
 
