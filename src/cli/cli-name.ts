@@ -1,8 +1,8 @@
 import path from "node:path";
 
-export const DEFAULT_CLI_NAME = "openclaw";
+export const DEFAULT_CLI_NAME = "dillobot";
 
-const KNOWN_CLI_NAMES = new Set([DEFAULT_CLI_NAME]);
+const KNOWN_CLI_NAMES = new Set([DEFAULT_CLI_NAME, "openclaw"]);
 const CLI_PREFIX_RE = /^(?:((?:pnpm|npm|bunx|npx)\s+))?(openclaw)\b/;
 
 export function resolveCliName(argv: string[] = process.argv): string {

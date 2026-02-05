@@ -1,6 +1,8 @@
 import type { AuthChoice } from "./onboard-types.js";
 
 const PREFERRED_PROVIDER_BY_AUTH_CHOICE: Partial<Record<AuthChoice, string>> = {
+  // DILLOBOT: Claude Code SDK uses the claude-code-agent provider
+  "claude-code-sdk": "claude-code-agent",
   oauth: "anthropic",
   "setup-token": "anthropic",
   "claude-cli": "anthropic",

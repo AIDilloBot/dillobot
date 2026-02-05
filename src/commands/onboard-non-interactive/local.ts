@@ -127,6 +127,22 @@ export async function runNonInteractiveOnboardingLocal(params: {
   });
 
   if (!opts.json) {
+    runtime.log("");
+    runtime.log("╔══════════════════════════════════════════════════════════════════╗");
+    runtime.log("║  IMPORTANT: Dashboard Pairing Required                           ║");
+    runtime.log("╚══════════════════════════════════════════════════════════════════╝");
+    runtime.log("");
+    runtime.log("When you first open the dashboard, you'll see 'Pairing Required'.");
+    runtime.log("DilloBot requires explicit device approval — even for localhost.");
+    runtime.log("");
+    runtime.log("To pair your dashboard:");
+    runtime.log(`  1. List pending requests:  ${formatCliCommand("openclaw devices list")}`);
+    runtime.log(
+      `  2. Approve the request:    ${formatCliCommand("openclaw devices approve <requestId>")}`,
+    );
+    runtime.log("");
+    runtime.log("Then refresh the dashboard. Your browser will be connected.");
+    runtime.log("");
     runtime.log(
       `Tip: run \`${formatCliCommand("openclaw configure --section web")}\` to store your Brave API key for web_search. Docs: https://docs.openclaw.ai/tools/web`,
     );

@@ -61,6 +61,12 @@ body {
     line-height: 1.6;
     overflow-x: hidden;
     min-height: 100vh;
+    -webkit-text-size-adjust: 100%;
+}
+
+/* Prevent horizontal overflow */
+main {
+    overflow-x: hidden;
 }
 
 /* Background Effects */
@@ -1012,6 +1018,7 @@ section {
     font-size: 0.9rem;
     overflow-x: auto;
     transition: all 0.2s ease;
+    max-width: 100%;
 }
 
 .code-block:hover {
@@ -1386,9 +1393,15 @@ section {
     .hero {
         height: auto;
         min-height: 100vh;
+        min-height: 100dvh;
         grid-template-columns: 1fr;
         text-align: center;
         overflow: visible;
+        padding-bottom: 60px;
+    }
+
+    .hero-content {
+        order: 2;
     }
 
     .hero-description {
@@ -1405,7 +1418,7 @@ section {
     }
 
     .hero-visual {
-        order: -1;
+        order: 1;
         max-width: 500px;
         margin: 0 auto;
     }
@@ -1425,6 +1438,15 @@ section {
 
     .mascot-showcase {
         grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .mascot-container {
+        order: 1;
+    }
+
+    .mascot-quote {
+        order: 2;
     }
 
     .install-methods {
@@ -1432,15 +1454,70 @@ section {
     }
 
     .security-steps {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .arch-layer {
+        max-width: 100%;
+    }
+
+    /* Fix table horizontal scroll */
+    .comparison-table {
+        min-width: 600px;
     }
 }
 
 @media (max-width: 768px) {
+    :root {
+        --content-padding: 20px;
+    }
+
+    /* Navigation mobile */
     .nav-links a:not(.nav-github) {
         display: none;
     }
 
+    .nav-github {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+    }
+
+    .logo-text {
+        font-size: 1.25rem;
+    }
+
+    .logo-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Hero adjustments */
+    .hero {
+        padding-bottom: 40px;
+    }
+
+    .hero-badge {
+        font-size: 0.75rem;
+    }
+
+    .hero-logo-img {
+        max-width: 320px;
+    }
+
+    .hero-description {
+        font-size: 1rem;
+    }
+
+    .hero-cta {
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        flex: 1;
+        min-width: 140px;
+    }
+
+    /* Features grid */
     .features-grid {
         grid-template-columns: 1fr;
     }
@@ -1449,30 +1526,39 @@ section {
         grid-column: span 1;
     }
 
+    .feature-card {
+        padding: 28px 24px;
+    }
+
+    /* Comparison table */
+    .comparison-table-wrapper {
+        margin: 0 -20px;
+        padding: 0 20px;
+    }
+
     .comparison-table th,
     .comparison-table td {
         padding: 12px 16px;
         font-size: 0.85rem;
     }
 
-    .post-install-steps {
-        flex-direction: column;
-        gap: 24px;
+    .status {
+        font-size: 0.75rem;
+        padding: 5px 10px;
+        display: block;
+        text-align: center;
     }
 
-    .footer-content {
-        grid-template-columns: 1fr;
-        gap: 40px;
-    }
-
-    .footer-links {
-        gap: 40px;
-    }
-
+    /* Architecture */
     .security-steps {
         grid-template-columns: 1fr 1fr;
     }
 
+    .security-outcomes {
+        gap: 16px;
+    }
+
+    /* Install section */
     .code-block-hero {
         font-size: 0.85rem;
         padding: 16px;
@@ -1484,11 +1570,116 @@ section {
 
     .install-tab {
         padding: 10px 16px;
+        font-size: 0.85rem;
+        flex: 1;
+        min-width: 100px;
+    }
+
+    .code-block {
         font-size: 0.8rem;
+    }
+
+    /* Mascot */
+    .mascot-showcase {
+        gap: 40px;
+    }
+
+    .mascot-quote blockquote {
+        font-size: 1.25rem;
+    }
+
+    /* Footer */
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
+
+    .footer-links {
+        gap: 40px;
+        flex-wrap: wrap;
+    }
+
+    .footer-col {
+        min-width: 120px;
+    }
+
+    /* Post install */
+    .post-install-steps {
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    /* Sections */
+    section {
+        padding: 80px var(--content-padding);
+    }
+
+    .section-header {
+        margin-bottom: 50px;
     }
 }
 
 @media (max-width: 480px) {
+    :root {
+        --content-padding: 16px;
+        --nav-height: 60px;
+    }
+
+    /* Hero section mobile */
+    .hero {
+        padding: calc(var(--nav-height) + 20px) var(--content-padding) 30px;
+        min-height: auto;
+        height: auto;
+        gap: 24px;
+    }
+
+    /* On small screens, show content first (title, CTA), then terminal */
+    .hero-content {
+        order: 1;
+    }
+
+    .hero-visual {
+        order: 2;
+    }
+
+    .hero-badge {
+        font-size: 0.7rem;
+        padding: 6px 12px;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        text-align: center;
+        line-height: 1.5;
+    }
+
+    .hero-badge .version-link {
+        display: inline;
+        word-break: break-all;
+    }
+
+    .hero-logo-img {
+        max-width: 280px;
+    }
+
+    .hero-description {
+        font-size: 0.95rem;
+        margin-bottom: 16px;
+    }
+
+    .hero-cta {
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        margin-bottom: 24px;
+    }
+
+    .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 12px 20px;
+        font-size: 0.9rem;
+    }
+
     .hero-stats {
         flex-direction: column;
         gap: 16px;
@@ -1498,8 +1689,68 @@ section {
         display: none;
     }
 
-    .code-block-hero {
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    .stat-label {
         font-size: 0.75rem;
+    }
+
+    /* Terminal mobile */
+    .hero-visual {
+        max-width: 100%;
+    }
+
+    .terminal-window {
+        animation: none;
+    }
+
+    .terminal-header {
+        padding: 12px 16px;
+    }
+
+    .terminal-body {
+        padding: 16px;
+        font-size: 0.75rem;
+        line-height: 1.6;
+    }
+
+    .terminal-line {
+        flex-wrap: wrap;
+    }
+
+    .command {
+        word-break: break-all;
+    }
+
+    .typing {
+        animation: none;
+        border-right: none;
+        width: auto;
+    }
+
+    /* Section headers */
+    .section-header {
+        margin-bottom: 40px;
+    }
+
+    .section-title {
+        font-size: 1.75rem;
+    }
+
+    .section-subtitle {
+        font-size: 1rem;
+    }
+
+    /* Install section mobile */
+    .install-hero {
+        margin-bottom: 32px;
+    }
+
+    .code-block-hero {
+        font-size: 0.7rem;
+        padding: 14px 12px;
     }
 
     .code-block-hero code {
@@ -1508,16 +1759,363 @@ section {
     }
 
     .install-hero-tagline {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
+    }
+
+    .install-tabs-container {
+        margin-bottom: 32px;
+    }
+
+    .install-tabs {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .install-tab {
+        padding: 12px 16px;
+        font-size: 0.85rem;
+    }
+
+    .code-block {
+        padding: 12px 14px;
+        font-size: 0.75rem;
+        gap: 8px;
+    }
+
+    .code-block code {
+        word-break: break-all;
+        white-space: normal;
+    }
+
+    .copy-btn {
+        padding: 6px;
+    }
+
+    .copy-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* Warnings and notices */
+    .openclaw-warning,
+    .pairing-notice {
+        padding: 16px 20px;
+        margin: 24px auto;
+    }
+
+    .warning-header,
+    .pairing-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+    }
+
+    .warning-header h3,
+    .pairing-header h3 {
+        font-size: 1rem;
+    }
+
+    .openclaw-warning > p,
+    .pairing-notice > p {
+        font-size: 0.85rem;
+        text-align: center;
+    }
+
+    .pairing-steps .code-block {
+        font-size: 0.7rem;
+    }
+
+    .pairing-note {
+        font-size: 0.8rem;
+        text-align: center;
+    }
+
+    /* Platform support */
+    .platform-support {
+        padding: 20px;
     }
 
     .platform-icons {
-        gap: 16px;
+        gap: 12px;
     }
 
     .platform {
         width: 40px;
         height: 40px;
+    }
+
+    .platform svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .platform-text {
+        font-size: 0.8rem;
+        text-align: center;
+    }
+
+    /* Mascot section */
+    .mascot-showcase {
+        gap: 30px;
+    }
+
+    .mascot-svg {
+        max-width: 280px;
+    }
+
+    .mascot-quote {
+        padding: 24px 20px;
+    }
+
+    .mascot-quote blockquote {
+        font-size: 1.1rem;
+    }
+
+    .mascot-quote cite {
+        font-size: 0.8rem;
+    }
+
+    /* Feature cards */
+    .feature-card {
+        padding: 24px 20px;
+    }
+
+    .feature-card h3 {
+        font-size: 1.1rem;
+    }
+
+    .feature-card p {
+        font-size: 0.9rem;
+    }
+
+    .feature-details {
+        margin-top: 16px;
+    }
+
+    .detail-row {
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 0;
+    }
+
+    .detail-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .detail-value {
+        font-size: 0.75rem;
+    }
+
+    .feature-highlighted::before {
+        top: 12px;
+        right: 12px;
+        font-size: 0.65rem;
+        padding: 3px 8px;
+    }
+
+    .feature-list li {
+        font-size: 0.85rem;
+        padding-left: 20px;
+    }
+
+    .code-snippet {
+        padding: 10px 12px;
+        font-size: 0.75rem;
+    }
+
+    /* Comparison table mobile */
+    .comparison-table-wrapper {
+        margin: 0 -16px;
+        padding: 0 16px;
+    }
+
+    .comparison-table {
+        font-size: 0.75rem;
+        min-width: 500px;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: 10px 12px;
+    }
+
+    .comparison-table td:first-child {
+        min-width: 120px;
+    }
+
+    .status {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+    }
+
+    /* Architecture section */
+    .architecture-diagram {
+        gap: 16px;
+    }
+
+    .arch-layer {
+        padding: 16px;
+    }
+
+    .layer-label {
+        font-size: 0.7rem;
+    }
+
+    .layer-note {
+        font-size: 0.7rem;
+    }
+
+    .layer-content span {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+    }
+
+    .security-steps {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .step-num {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+
+    .step-name {
+        font-size: 0.8rem;
+    }
+
+    .step-desc {
+        font-size: 0.7rem;
+    }
+
+    .security-outcomes {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .outcome-blocked,
+    .outcome-allowed {
+        font-size: 0.75rem;
+        text-align: center;
+    }
+
+    /* Sync section */
+    .sync-section {
+        padding: 60px var(--content-padding);
+    }
+
+    .sync-info {
+        margin-top: 32px;
+    }
+
+    .sync-card {
+        padding: 24px 20px;
+    }
+
+    .sync-card h3 {
+        font-size: 1.1rem;
+    }
+
+    .sync-card p {
+        font-size: 0.9rem;
+    }
+
+    .security-patches-note {
+        padding: 20px;
+        margin-top: 32px;
+    }
+
+    .security-patches-note strong {
+        font-size: 1rem;
+        margin-bottom: 12px;
+    }
+
+    .patch-list {
+        gap: 8px;
+    }
+
+    .patch-item {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+    }
+
+    /* Footer mobile */
+    .footer {
+        padding: 40px var(--content-padding) 30px;
+    }
+
+    .footer-content {
+        gap: 30px;
+        margin-bottom: 30px;
+    }
+
+    .footer-brand {
+        text-align: center;
+    }
+
+    .footer-logo {
+        justify-content: center;
+    }
+
+    .footer-tagline,
+    .footer-credit {
+        text-align: center;
+    }
+
+    .footer-links {
+        flex-direction: column;
+        gap: 24px;
+        text-align: center;
+    }
+
+    .footer-col h4 {
+        margin-bottom: 12px;
+    }
+
+    .footer-col a {
+        padding: 8px 0;
+    }
+
+    .footer-bottom {
+        padding-top: 24px;
+    }
+
+    .footer-bottom p {
+        font-size: 0.8rem;
+    }
+
+    .version-info {
+        font-size: 0.75rem;
+    }
+
+    /* Sections padding */
+    section {
+        padding: 60px var(--content-padding);
+    }
+
+    /* Reduce background effects for better mobile performance */
+    .gradient-orbs {
+        opacity: 0.5;
+    }
+
+    .orb {
+        filter: blur(80px);
+    }
+
+    .orb-1 {
+        width: 300px;
+        height: 300px;
+    }
+
+    .orb-2 {
+        width: 250px;
+        height: 250px;
+    }
+
+    .orb-3 {
+        display: none;
     }
 }
 
@@ -1530,7 +2128,7 @@ section {
 
 .sync-info {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
     gap: 24px;
     margin-top: 48px;
 }
@@ -1695,5 +2293,162 @@ section {
     .patch-list {
         flex-direction: column;
         align-items: center;
+    }
+}
+
+/* Extra small screens (iPhone SE, older phones) */
+@media (max-width: 360px) {
+    :root {
+        --content-padding: 12px;
+    }
+
+    .nav-content {
+        padding: 0 12px;
+    }
+
+    .logo-text {
+        font-size: 1.1rem;
+    }
+
+    .logo-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .nav-github {
+        padding: 5px 10px;
+        font-size: 0.8rem;
+        gap: 4px;
+    }
+
+    .nav-github svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .hero-logo-img {
+        max-width: 240px;
+    }
+
+    .hero-badge {
+        font-size: 0.65rem;
+        padding: 3px 8px;
+    }
+
+    .hero-description {
+        font-size: 0.9rem;
+    }
+
+    .btn {
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+
+    .stat-value {
+        font-size: 1.25rem;
+    }
+
+    .terminal-body {
+        padding: 12px;
+        font-size: 0.65rem;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+    }
+
+    .section-subtitle {
+        font-size: 0.9rem;
+    }
+
+    .code-block-hero {
+        font-size: 0.6rem;
+        padding: 12px 10px;
+    }
+
+    .code-block {
+        padding: 10px 12px;
+        font-size: 0.65rem;
+    }
+
+    .install-tab {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+
+    .feature-card {
+        padding: 20px 16px;
+    }
+
+    .feature-card h3 {
+        font-size: 1rem;
+    }
+
+    .feature-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .feature-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .mascot-svg {
+        max-width: 220px;
+    }
+
+    .mascot-quote {
+        padding: 20px 16px;
+    }
+
+    .mascot-quote blockquote {
+        font-size: 1rem;
+    }
+
+    .comparison-table {
+        font-size: 0.7rem;
+        min-width: 450px;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: 8px 10px;
+    }
+
+    .sync-card {
+        padding: 20px 16px;
+    }
+
+    .sync-card h3 {
+        font-size: 1rem;
+    }
+
+    .footer {
+        padding: 30px var(--content-padding) 20px;
+    }
+
+    .footer-logo span {
+        font-size: 1.1rem;
+    }
+
+    .armadillo-logo-small {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* Further reduce effects on extra small screens */
+    .gradient-orbs {
+        opacity: 0.3;
+    }
+
+    .orb-1,
+    .orb-2,
+    .orb-3 {
+        display: none;
+    }
+
+    .noise-overlay {
+        display: none;
     }
 }

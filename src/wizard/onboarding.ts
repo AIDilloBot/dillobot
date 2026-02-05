@@ -392,7 +392,10 @@ export async function runOnboardingWizard(
   });
   nextConfig = authResult.config;
 
-  if (authChoiceFromPrompt) {
+  // Only prompt for model selection if auth was skipped.
+  // Auth choices like claude-code-sdk already set the appropriate model.
+  // This matches the behavior in configure.gateway-auth.ts.
+  if (authChoiceFromPrompt && authChoice === "skip") {
     const modelSelection = await promptDefaultModel({
       config: nextConfig,
       prompter,

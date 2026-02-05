@@ -282,6 +282,28 @@ export async function finalizeOnboardingWizard(options: FinalizeOnboardingOption
     "Control UI",
   );
 
+  // DilloBot: Prominent reminder about dashboard pairing requirement
+  await prompter.note(
+    [
+      "╔══════════════════════════════════════════════════════════════════╗",
+      "║  IMPORTANT: Dashboard Pairing Required                          ║",
+      "╚══════════════════════════════════════════════════════════════════╝",
+      "",
+      "When you first open the dashboard, you'll see 'Pairing Required'.",
+      "DilloBot requires explicit device approval — even for localhost.",
+      "",
+      "To pair your dashboard:",
+      "",
+      `  1. List pending requests:  ${formatCliCommand("openclaw devices list")}`,
+      `  2. Approve the request:    ${formatCliCommand("openclaw devices approve <requestId>")}`,
+      "",
+      "Then refresh the dashboard. Your browser will be connected.",
+      "",
+      "This is a DilloBot security feature — no device is trusted by default.",
+    ].join("\n"),
+    "🛡️  Dashboard Pairing",
+  );
+
   let controlUiOpened = false;
   let controlUiOpenHint: string | undefined;
   let seededInBackground = false;
@@ -466,9 +488,9 @@ export async function finalizeOnboardingWizard(options: FinalizeOnboardingOption
 
   await prompter.outro(
     controlUiOpened
-      ? "Onboarding complete. Dashboard opened with your token; keep that tab to control OpenClaw."
+      ? "Onboarding complete! Dashboard opened — remember to pair it with 'dillobot devices list' then 'dillobot devices approve <id>'."
       : seededInBackground
-        ? "Onboarding complete. Web UI seeded in the background; open it anytime with the tokenized link above."
-        : "Onboarding complete. Use the tokenized dashboard link above to control OpenClaw.",
+        ? "Onboarding complete! Web UI seeded — when you open it, pair with 'dillobot devices list' then 'dillobot devices approve <id>'."
+        : "Onboarding complete! Use the dashboard link above. Remember: pair it with 'dillobot devices list' then 'dillobot devices approve <id>'.",
   );
 }
