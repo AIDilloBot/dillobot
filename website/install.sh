@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Check if running from repo or via curl
 INSTALL_FROM_LOCAL=0
-if [[ -f "${SCRIPT_DIR}/package.json" ]] && grep -q '"dillobot"' "${SCRIPT_DIR}/package.json" 2>/dev/null; then
+if [[ -f "${SCRIPT_DIR}/package.json" ]] && grep -q '"@dillobot/dillobot"' "${SCRIPT_DIR}/package.json" 2>/dev/null; then
     INSTALL_FROM_LOCAL=1
     REPO_DIR="${SCRIPT_DIR}"
 fi
@@ -198,11 +198,11 @@ install_from_npm() {
     echo -e "${WARN}→${NC} Installing from npm registry..."
 
     # Check if already installed globally
-    if npm list -g dillobot &>/dev/null; then
+    if npm list -g @dillobot/dillobot &>/dev/null; then
         echo -e "${INFO}i${NC} Updating existing installation..."
-        npm update -g dillobot
+        npm update -g @dillobot/dillobot
     else
-        npm install -g dillobot
+        npm install -g @dillobot/dillobot
     fi
 
     # Verify installation
@@ -250,7 +250,7 @@ uninstall() {
     rm -f "$HOME/.local/bin/openclaw" 2>/dev/null || true
 
     # Try npm uninstall if globally installed
-    npm uninstall -g dillobot 2>/dev/null || true
+    npm uninstall -g @dillobot/dillobot 2>/dev/null || true
     npm uninstall -g openclaw 2>/dev/null || true
 
     echo -e "${SUCCESS}✓${NC} DilloBot uninstalled"

@@ -176,12 +176,12 @@ function Install-FromNpm {
     Write-Status "Installing from npm registry..." -Type "warn"
 
     try {
-        $installed = & npm list -g dillobot 2>$null
+        $installed = & npm list -g @dillobot/dillobot 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Status "Updating existing installation..." -Type "info"
-            & npm update -g dillobot
+            & npm update -g @dillobot/dillobot
         } else {
-            & npm install -g dillobot
+            & npm install -g @dillobot/dillobot
         }
 
         if ($LASTEXITCODE -ne 0) {
@@ -282,7 +282,7 @@ function Invoke-Uninstall {
 
     # Try npm uninstall
     try {
-        & npm uninstall -g dillobot 2>$null
+        & npm uninstall -g @dillobot/dillobot 2>$null
         & npm uninstall -g openclaw 2>$null
     } catch {}
 
