@@ -113,7 +113,7 @@ export async function runClaudeCodeSdkAgent(
         options: {
           abortController,
           cwd: params.workspaceDir,
-          model: params.model ?? "claude-sonnet-4-5",
+          model: params.model ?? "claude-opus-4-5",
           // Use default tools
           tools: { type: "preset", preset: "claude_code" },
           // Allow all tools automatically for bot usage
@@ -287,5 +287,5 @@ export function getClaudeCodeFallbackProvider(): string {
  * Get fallback model ID when Claude Code SDK is unavailable.
  */
 export function getClaudeCodeFallbackModel(): string {
-  return "claude-sonnet-4-5";
+  return "claude-opus-4-5";
 }

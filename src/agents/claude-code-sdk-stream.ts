@@ -37,15 +37,15 @@ type SdkToolsConfig = { type: "preset"; preset: "claude_code" } | string[];
 /**
  * Determine SDK tools configuration based on context.
  *
- * DILLOBOT: Use preset tools so the SDK can execute Claude Code tools internally.
+ * DILLOBOT: ALWAYS use preset tools so the SDK can execute Claude Code tools internally.
  * With maxTurns: 100, the SDK handles the full agentic loop until Claude finishes.
+ *
+ * CRITICAL: Without preset tools, the agent becomes a chatbot that can't take actions!
  */
-function getSdkToolsConfig(tools: Tool[] | undefined): SdkToolsConfig {
-  // Use preset tools so the SDK can execute Claude Code tools internally.
-  if (tools && tools.length > 0) {
-    return { type: "preset", preset: "claude_code" };
-  }
-  return [];
+function getSdkToolsConfig(_tools: Tool[] | undefined): SdkToolsConfig {
+  // ALWAYS use preset tools - without this, the agent can't do anything!
+  // The SDK needs the claude_code preset to enable file operations, bash, etc.
+  return { type: "preset", preset: "claude_code" };
 }
 
 // Dynamic import for the Claude Agent SDK
@@ -319,6 +319,20 @@ async function processSdkQuery(
     // The SDK handles the complete agentic loop including tool execution.
     // With preset tools, Claude outputs tool_use blocks which the SDK executes
     // internally using Claude Code's tool implementations.
+
+    // CRITICAL: Use claude_code preset with appended context to enable agentic behavior
+    // Without the preset, the agent becomes a chatbot that just describes actions
+    const systemPromptConfig = systemPrompt
+      ? {
+          type: "preset" as const,
+          preset: "claude_code" as const,
+          append: systemPrompt,
+        }
+      : {
+          type: "preset" as const,
+          preset: "claude_code" as const,
+        };
+
     const queryIterator = sdk.query({
       prompt,
       options: {
@@ -332,8 +346,8 @@ async function processSdkQuery(
         maxTurns: 100,
         // Don't persist to SDK session files - OpenClaw manages sessions
         persistSession: false,
-        // Pass the system prompt
-        systemPrompt: systemPrompt || undefined,
+        // CRITICAL: Use preset system prompt format to enable agentic behavior
+        systemPrompt: systemPromptConfig,
         // Include partial messages for streaming
         includePartialMessages: true,
         // Bypass permissions since we're non-interactive
@@ -668,8 +682,24 @@ async function processSdkQuery(
         });
       }
 
-      // Emit text_end with the final content
-      // Note: We've already streamed most content, but text_end signals completion
+      // Emit any remaining text that wasn't streamed via text_delta
+      // This happens when full stripping removes different content than light stripping
+      if (finalText.length > lastEmittedLength) {
+        const remainingDelta = finalText.slice(lastEmittedLength);
+        if (remainingDelta.trim()) {
+          stream.push({
+            type: "text_delta",
+            contentIndex: currentTextIndex,
+            delta: remainingDelta,
+            partial: partialMessage,
+          });
+        }
+      }
+
+      // Emit text_end as completion signal
+      // Note: Content was already streamed via text_delta; text_end signals completion only
+      // The content field is included for consumers that need the final state (e.g., for storage)
+      // Consumers should NOT append this to previously received deltas
       stream.push({
         type: "text_end",
         contentIndex: currentTextIndex,
