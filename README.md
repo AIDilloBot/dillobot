@@ -9,6 +9,10 @@
 
 ---
 
+## Version
+
+**DilloBot Version:** `v2026.2.5`
+
 ## Upstream Version
 
 <!-- DILLOBOT-UPSTREAM-VERSION-START -->
