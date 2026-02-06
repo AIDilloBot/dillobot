@@ -7,11 +7,10 @@
 
 // DILLOBOT-UPSTREAM-INFO-START
 // Auto-updated by scripts/sync/upstream-sync-agent.ts
-// Run `npm run dillobot:sync` or `npx ts-node scripts/sync/update-version.ts` to populate
-export const UPSTREAM_VERSION = "v2026.2.1";
-export const UPSTREAM_COMMIT = "c429ccb";
-export const UPSTREAM_COMMIT_FULL = "c429ccb64fc319babf4f8adc95df6d658a2d6b2f";
-export const LAST_SYNC_DATE = "2026-02-02";
+export const UPSTREAM_VERSION = "v2026.2.3";
+export const UPSTREAM_COMMIT = "134c03a";
+export const UPSTREAM_COMMIT_FULL = "134c03a90";
+export const LAST_SYNC_DATE = "2026-02-06";
 // DILLOBOT-UPSTREAM-INFO-END
 
 export const DILLOBOT_PRODUCT_NAME = "DilloBot";

@@ -11,17 +11,17 @@
 
 ## Version
 
-**DilloBot Version:** `v2026.2.5`
+**DilloBot Version:** `v2026.2.6`
 
 ## Upstream Version
 
 <!-- DILLOBOT-UPSTREAM-VERSION-START -->
 | | |
 |---|---|
-| **Based on OpenClaw** | `v2026.2.1-11-gc429ccb64` |
-| **Upstream Commit** | [`c429ccb`](https://github.com/openclaw/openclaw/commit/c429ccb64fc319babf4f8adc95df6d658a2d6b2f) |
-| **Last Synced** | 2026-02-02 |
-| **Commits Behind** | 117 |
+| **Based on OpenClaw** | `v2026.2.3` |
+| **Upstream Commit** | [`134c03a`](https://github.com/openclaw/openclaw/commit/134c03a90) |
+| **Last Synced** | 2026-02-06 |
+| **Commits Behind** | 0 |
 <!-- DILLOBOT-UPSTREAM-VERSION-END -->
 
 > This section is automatically updated by the sync agent. See [Upstream Sync](#upstream-sync) for details.

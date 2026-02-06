@@ -1,6 +1,6 @@
 {
   "name": "@dillobot/dillobot",
-  "version": "2026.2.5",
+  "version": "2026.2.6",
   "description": "Security-hardened fork of OpenClaw with encrypted credentials, injection protection, and mandatory auth",
   "keywords": [],
   "license": "MIT",
