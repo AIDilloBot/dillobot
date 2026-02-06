@@ -1030,15 +1030,16 @@ async function syncWithUpstream(): Promise<SyncResult> {
       const blockedRemoved = await removeBlockedFiles();
       const verification = await verifySecurityPatches();
       if (verification.valid) {
-        // Update README, website, install script, and version file, then amend the merge commit
+        // Update README, website, install script, version file, and bump DilloBot version
         const readmeUpdated = await updateReadmeVersion();
         const websiteUpdated = await updateWebsiteVersion();
         const installCopied = await copyInstallScripts();
         const versionFileUpdated = await updateDilloBotVersionFile();
-        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated || blockedRemoved.length > 0) {
+        const newVersion = await bumpDilloBotVersion();
+        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated || newVersion || blockedRemoved.length > 0) {
           run('git commit --amend --no-edit');
         }
-        console.log("✅ Simple merge successful! Security patches intact.\n");
+        console.log(`✅ Simple merge successful! Security patches intact.${newVersion ? ` DilloBot v${newVersion}` : ""}\n`);
         return {
           success: true,
           action: "auto-merged",
@@ -1074,19 +1075,20 @@ async function syncWithUpstream(): Promise<SyncResult> {
       const blockedRemoved = await removeBlockedFiles();
       const verification = await verifySecurityPatches();
       if (verification.valid) {
-        // Update README, website, install script, and version file, then amend the merge commit
+        // Update README, website, install script, version file, and bump DilloBot version
         const readmeUpdated = await updateReadmeVersion();
         const websiteUpdated = await updateWebsiteVersion();
         const installCopied = await copyInstallScripts();
         const versionFileUpdated = await updateDilloBotVersionFile();
-        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated || blockedRemoved.length > 0) {
+        const newVersion = await bumpDilloBotVersion();
+        if (readmeUpdated || websiteUpdated || installCopied || versionFileUpdated || newVersion || blockedRemoved.length > 0) {
           run('git commit --amend --no-edit');
         }
-        console.log("✅ Merge successful! All security patches intact.\n");
+        console.log(`✅ Merge successful! All security patches intact.${newVersion ? ` DilloBot v${newVersion}` : ""}\n`);
         return {
           success: true,
           action: "auto-merged",
-          summary: `Successfully merged ${updates.commitCount} upstream commits.${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}`,
+          summary: `Successfully merged ${updates.commitCount} upstream commits.${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}${newVersion ? ` DilloBot v${newVersion}` : ""}`,
           upstreamChanges: updates.summary,
         };
       } else {
@@ -1119,17 +1121,18 @@ async function syncWithUpstream(): Promise<SyncResult> {
         const blockedRemoved = await removeBlockedFiles();
         const verification = await verifySecurityPatches();
         if (verification.valid) {
-          // Update README, website, install script, and version file before committing
+          // Update README, website, install script, version file, and bump DilloBot version
           await updateReadmeVersion();
           await updateWebsiteVersion();
           await copyInstallScripts();
           await updateDilloBotVersionFile();
+          const newVersion = await bumpDilloBotVersion();
           run('git commit -m "Merge upstream OpenClaw (DilloBot auto-sync via Claude Code)"');
-          console.log("\n✅ Merge successful with Claude Code conflict resolution!\n");
+          console.log(`\n✅ Merge successful with Claude Code conflict resolution!${newVersion ? ` DilloBot v${newVersion}` : ""}\n`);
           return {
             success: true,
             action: "auto-merged",
-            summary: `Merged ${updates.commitCount} commits with Claude Code-assisted resolution.${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}`,
+            summary: `Merged ${updates.commitCount} commits with Claude Code-assisted resolution.${blockedRemoved.length > 0 ? ` Removed ${blockedRemoved.length} blocked files.` : ""}${newVersion ? ` DilloBot v${newVersion}` : ""}`,
             appliedPatches: Object.keys(analysis.resolutions),
             upstreamChanges: updates.summary,
           };
@@ -1150,17 +1153,18 @@ async function syncWithUpstream(): Promise<SyncResult> {
       // Verify security patches are intact
       const verification = await verifySecurityPatches();
       if (verification.valid) {
-        // Update README, website, install script, and version file before committing
+        // Update README, website, install script, version file, and bump DilloBot version
         await updateReadmeVersion();
         await updateWebsiteVersion();
         await copyInstallScripts();
         await updateDilloBotVersionFile();
+        const newVersion = await bumpDilloBotVersion();
         run('git commit -m "Merge upstream OpenClaw with DilloBot security patches (smart merge via Claude Code)"');
-        console.log("\n✅ Smart merge successful! All security patches preserved.\n");
+        console.log(`\n✅ Smart merge successful! All security patches preserved.${newVersion ? ` DilloBot v${newVersion}` : ""}\n`);
         return {
           success: true,
           action: "auto-merged",
-          summary: `Merged ${updates.commitCount} commits using smart merge. Preserved patches in ${smartResult.merged.length} security files.`,
+          summary: `Merged ${updates.commitCount} commits using smart merge. Preserved patches in ${smartResult.merged.length} security files.${newVersion ? ` DilloBot v${newVersion}` : ""}`,
           appliedPatches: smartResult.merged,
           upstreamChanges: updates.summary,
         };
@@ -1389,6 +1393,152 @@ export const LAST_SYNC_DATE = "${today}";
     console.log("⚠️  Could not update dillobot-version.ts:", error);
     return false;
   }
+}
+
+/**
+ * Get current DilloBot version from package.json
+ */
+async function getCurrentDilloBotVersion(): Promise<string> {
+  try {
+    const packageJson = await fs.readFile("package.json", "utf-8");
+    const pkg = JSON.parse(packageJson);
+    return pkg.version || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+/**
+ * Compute the next DilloBot version by bumping the patch segment
+ * Version format: YYYY.M.P (e.g., 2026.2.5 -> 2026.2.6)
+ */
+function computeNextVersion(currentVersion: string): string {
+  const parts = currentVersion.split(".");
+  if (parts.length >= 3) {
+    const patch = parseInt(parts[2], 10) || 0;
+    return `${parts[0]}.${parts[1]}.${patch + 1}`;
+  }
+  // Fallback: just append .1
+  return `${currentVersion}.1`;
+}
+
+/**
+ * Update DilloBot version in package.json
+ */
+async function updatePackageJsonVersion(newVersion: string): Promise<boolean> {
+  try {
+    const packageJsonPath = "package.json";
+    let content = await fs.readFile(packageJsonPath, "utf-8");
+
+    // Replace the version field
+    const versionRegex = /"version":\s*"[^"]+"/;
+    if (versionRegex.test(content)) {
+      content = content.replace(versionRegex, `"version": "${newVersion}"`);
+      await fs.writeFile(packageJsonPath, content, "utf-8");
+      run(`git add ${packageJsonPath}`);
+      console.log(`📝 Updated package.json version to ${newVersion}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.log("⚠️  Could not update package.json:", error);
+    return false;
+  }
+}
+
+/**
+ * Update DilloBot version in README.md
+ */
+async function updateReadmeDilloBotVersion(newVersion: string): Promise<boolean> {
+  try {
+    const readmePath = "README.md";
+    let content = await fs.readFile(readmePath, "utf-8");
+
+    // Match: **DilloBot Version:** `vX.X.X`
+    const versionRegex = /\*\*DilloBot Version:\*\* `v[^`]+`/;
+    if (versionRegex.test(content)) {
+      content = content.replace(versionRegex, `**DilloBot Version:** \`v${newVersion}\``);
+      await fs.writeFile(readmePath, content, "utf-8");
+      run(`git add ${readmePath}`);
+      console.log(`📝 Updated README.md DilloBot version to v${newVersion}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.log("⚠️  Could not update README.md DilloBot version:", error);
+    return false;
+  }
+}
+
+/**
+ * Update DilloBot version in website/index.html (hero badge and footer)
+ */
+async function updateWebsiteDilloBotVersion(newVersion: string): Promise<boolean> {
+  const websitePath = "website/index.html";
+  const UPSTREAM_REPO_URL = "https://github.com/openclaw/openclaw";
+
+  try {
+    await fs.access(websitePath);
+  } catch {
+    return false;
+  }
+
+  try {
+    let html = await fs.readFile(websitePath, "utf-8");
+    let updated = false;
+
+    const versionInfo = getUpstreamVersionInfo();
+    const tagVersion = versionInfo.version.split("-")[0] || versionInfo.version;
+
+    // Update hero badge: <!-- DILLOBOT-VERSION -->vX.X.X • Based on OpenClaw ...<!-- /DILLOBOT-VERSION -->
+    const heroVersionRegex = /<!-- DILLOBOT-VERSION -->.*?<!-- \/DILLOBOT-VERSION -->/;
+    const newHeroVersion = `<!-- DILLOBOT-VERSION -->v${newVersion} • Based on OpenClaw <a href="${UPSTREAM_REPO_URL}/commit/${versionInfo.commit}" target="_blank" class="version-link">${tagVersion} (${versionInfo.commitShort})</a><!-- /DILLOBOT-VERSION -->`;
+
+    if (heroVersionRegex.test(html)) {
+      html = html.replace(heroVersionRegex, newHeroVersion);
+      updated = true;
+    }
+
+    // Update footer: <!-- DILLOBOT-FOOTER-VERSION -->...<!-- /DILLOBOT-FOOTER-VERSION -->
+    const footerVersionRegex = /<!-- DILLOBOT-FOOTER-VERSION -->.*?<!-- \/DILLOBOT-FOOTER-VERSION -->/;
+    const newFooterVersion = `<!-- DILLOBOT-FOOTER-VERSION --><p class="version-info">DilloBot v${newVersion} • Based on OpenClaw commit <a href="${UPSTREAM_REPO_URL}/commit/${versionInfo.commit}" target="_blank"><code>${versionInfo.commitShort}</code></a> • <a href="https://github.com/AIDilloBot/dillobot/blob/main/README.md#upstream-version" target="_blank">View full sync status</a></p><!-- /DILLOBOT-FOOTER-VERSION -->`;
+
+    if (footerVersionRegex.test(html)) {
+      html = html.replace(footerVersionRegex, newFooterVersion);
+      updated = true;
+    }
+
+    if (updated) {
+      await fs.writeFile(websitePath, html, "utf-8");
+      run(`git add ${websitePath}`);
+      console.log(`📝 Updated website DilloBot version to v${newVersion}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.log("⚠️  Could not update website DilloBot version:", error);
+    return false;
+  }
+}
+
+/**
+ * Bump DilloBot version after successful upstream sync
+ * Updates: package.json, README.md, website/index.html
+ */
+async function bumpDilloBotVersion(): Promise<string | null> {
+  const currentVersion = await getCurrentDilloBotVersion();
+  const newVersion = computeNextVersion(currentVersion);
+
+  console.log(`\n📦 Bumping DilloBot version: ${currentVersion} → ${newVersion}`);
+
+  const packageUpdated = await updatePackageJsonVersion(newVersion);
+  const readmeUpdated = await updateReadmeDilloBotVersion(newVersion);
+  const websiteUpdated = await updateWebsiteDilloBotVersion(newVersion);
+
+  if (packageUpdated || readmeUpdated || websiteUpdated) {
+    return newVersion;
+  }
+  return null;
 }
 
 /**
