@@ -113,7 +113,7 @@ export async function runClaudeCodeSdkAgent(
         options: {
           abortController,
           cwd: params.workspaceDir,
-          model: params.model ?? "claude-opus-4-5",
+          model: params.model ?? "claude-opus-4-6",
           // Use default tools
           tools: { type: "preset", preset: "claude_code" },
           // Allow all tools automatically for bot usage
@@ -231,6 +231,20 @@ export function getClaudeCodeSdkProviderConfig() {
     auth: "subscription" as const,
     models: [
       {
+        id: "claude-opus-4-6",
+        name: "Claude Opus 4.6 (Claude Code)",
+        reasoning: false,
+        input: ["text", "image"] as ("text" | "image")[],
+        cost: {
+          input: 0, // Covered by subscription
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+        },
+        contextWindow: 200000,
+        maxTokens: 8192,
+      },
+      {
         id: "claude-opus-4-5",
         name: "Claude Opus 4.5 (Claude Code)",
         reasoning: false,
@@ -287,5 +301,5 @@ export function getClaudeCodeFallbackProvider(): string {
  * Get fallback model ID when Claude Code SDK is unavailable.
  */
 export function getClaudeCodeFallbackModel(): string {
-  return "claude-opus-4-5";
+  return "claude-opus-4-6";
 }

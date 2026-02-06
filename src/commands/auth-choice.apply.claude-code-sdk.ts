@@ -91,8 +91,8 @@ export async function applyAuthChoiceClaudeCodeSdk(
   });
 
   // DILLOBOT: Also set the model config in agents.defaults
-  // Default to Opus 4.5 for best quality
-  const modelRef = `${provider}/claude-opus-4-5`;
+  // Default to Opus 4.6 for best quality
+  const modelRef = `${provider}/claude-opus-4-6`;
   const existingModel = nextConfig.agents?.defaults?.model;
   nextConfig = {
     ...nextConfig,

@@ -59,6 +59,9 @@ const SECURITY_CRITICAL_FILES = [
   "src/agents/claude-code-sdk-runner.ts", // SDK query runner
   "src/agents/pi-embedded-runner/run.ts", // SDK integration hook
   "src/commands/auth-choice.apply.claude-code-sdk.ts", // SDK auth choice handler
+  // DilloBot model defaults
+  "src/agents/defaults.ts",               // Default model (Opus 4.6)
+  "src/agents/cli-backends.ts",           // Model aliases
 ];
 
 interface SyncResult {
@@ -540,8 +543,45 @@ async function verifySecurityPatches(): Promise<{ valid: boolean; issues: string
     if (!sdkRunner.includes("bypassPermissions")) {
       issues.push("WARNING: permissionMode bypassPermissions missing from SDK options");
     }
+    // Check for Opus 4.6 in model list
+    if (!sdkRunner.includes("claude-opus-4-6")) {
+      issues.push("CRITICAL: claude-opus-4-6 missing from claude-code-sdk-runner.ts model list");
+    }
   } catch {
     issues.push("WARNING: Could not read claude-code-sdk-runner.ts");
+  }
+
+  // Check 5d: Default model is Opus 4.6
+  try {
+    const defaults = await fs.readFile("src/agents/defaults.ts", "utf-8");
+    if (!defaults.includes('DEFAULT_MODEL = "claude-opus-4-6"')) {
+      issues.push("CRITICAL: DEFAULT_MODEL should be claude-opus-4-6 in defaults.ts");
+    }
+  } catch {
+    issues.push("ERROR: Could not read defaults.ts");
+  }
+
+  // Check 5e: CLI backends has Opus 4.6 aliases
+  try {
+    const cliBackends = await fs.readFile("src/agents/cli-backends.ts", "utf-8");
+    if (!cliBackends.includes('"claude-opus-4-6"')) {
+      issues.push("CRITICAL: claude-opus-4-6 alias missing from cli-backends.ts");
+    }
+    if (!cliBackends.includes('"opus-4.6"')) {
+      issues.push("CRITICAL: opus-4.6 alias missing from cli-backends.ts");
+    }
+  } catch {
+    issues.push("ERROR: Could not read cli-backends.ts");
+  }
+
+  // Check 5f: Auth choice apply uses Opus 4.6
+  try {
+    const authChoice = await fs.readFile("src/commands/auth-choice.apply.claude-code-sdk.ts", "utf-8");
+    if (!authChoice.includes("claude-opus-4-6")) {
+      issues.push("CRITICAL: claude-opus-4-6 missing from auth-choice.apply.claude-code-sdk.ts");
+    }
+  } catch {
+    issues.push("ERROR: Could not read auth-choice.apply.claude-code-sdk.ts");
   }
 
   // Check 5d: Claude Agent SDK package

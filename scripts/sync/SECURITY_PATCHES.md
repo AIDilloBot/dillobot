@@ -132,6 +132,46 @@ security?: SecurityConfig;
 
 ---
 
+### 5b. Default Model Configuration (Opus 4.6)
+
+**Files:**
+- `src/agents/defaults.ts` — DEFAULT_MODEL set to `claude-opus-4-6`
+- `src/agents/cli-backends.ts` — Model aliases include `opus-4.6` and `claude-opus-4-6`
+- `src/agents/claude-code-sdk-runner.ts` — Model list includes `claude-opus-4-6` first, default query model
+- `src/commands/auth-choice.apply.claude-code-sdk.ts` — Sets model to `claude-code-agent/claude-opus-4-6`
+
+**Required in `src/agents/defaults.ts`:**
+```typescript
+export const DEFAULT_MODEL = "claude-opus-4-6";
+```
+
+**Required in `src/agents/cli-backends.ts`:**
+```typescript
+const CLAUDE_MODEL_ALIASES: Record<string, string> = {
+  opus: "opus",
+  "opus-4.6": "opus",
+  "opus-4.5": "opus",
+  "opus-4": "opus",
+  "claude-opus-4-6": "opus",
+  "claude-opus-4-5": "opus",
+  // ...
+};
+```
+
+**Required in `src/agents/claude-code-sdk-runner.ts`:**
+- `getClaudeCodeSdkProviderConfig()` must list `claude-opus-4-6` first in models array
+- Default model in `sdk.query()` must be `claude-opus-4-6`
+- `getClaudeCodeFallbackModel()` must return `claude-opus-4-6`
+
+**Required in `src/commands/auth-choice.apply.claude-code-sdk.ts`:**
+```typescript
+const modelRef = `${provider}/claude-opus-4-6`;
+```
+
+**Why:** DilloBot defaults to the latest and best available Claude model for optimal quality.
+
+---
+
 ### 6. Claude Code SDK Provider Detection
 
 **File:** `src/agents/models-config.providers.ts`
@@ -1619,5 +1659,12 @@ const creds = await retrieveChannelCreds("matrix", "default");
 - 84. [ ] `tool_choice: "none"` in OpenAI security provider
 - 85. [ ] Strict JSON parsing (balanced braces) in injection-analyzer.ts
 - 86. [ ] Strict JSON parsing (balanced braces) in skill-inspector.ts
+- 87. [ ] `DEFAULT_MODEL = "claude-opus-4-6"` in defaults.ts
+- 88. [ ] `claude-opus-4-6` in cli-backends.ts model aliases
+- 89. [ ] `opus-4.6` in cli-backends.ts model aliases
+- 90. [ ] `claude-opus-4-6` as first model in claude-code-sdk-runner.ts getClaudeCodeSdkProviderConfig
+- 91. [ ] `claude-opus-4-6` as default in sdk.query() in claude-code-sdk-runner.ts
+- 92. [ ] `claude-opus-4-6` returned by getClaudeCodeFallbackModel() in claude-code-sdk-runner.ts
+- 93. [ ] `claude-code-agent/claude-opus-4-6` set in auth-choice.apply.claude-code-sdk.ts
 
 **Why:** Messaging channel tokens are high-value credentials. A leaked bot token allows impersonation. Encrypting them at rest provides defense-in-depth alongside config file permissions.
