@@ -116,21 +116,37 @@ function formatElapsed(ms: number): string {
   return `${seconds}s`;
 }
 
+// Default timeout for Claude Code CLI (5 minutes)
+const CLAUDE_TIMEOUT_MS = 5 * 60 * 1000;
+
 /**
  * Run Claude Code CLI with a prompt and get the response
- * Spawns claude directly (no shell) to avoid backtick/variable interpretation issues
+ *
+ * Fixed issues from previous implementation:
+ * 1. Added timeout with SIGKILL to prevent indefinite hangs
+ * 2. Prompt passed via stdin (not CLI arg) to handle large prompts safely
+ * 3. Stdin properly closed after writing to signal EOF
+ * 4. Process killed on timeout to prevent orphaned processes
  */
 async function askClaude(prompt: string, options?: {
   allowedTools?: string[];
   maxTurns?: number;
+  timeoutMs?: number;
 }): Promise<string> {
+  const timeoutMs = options?.timeoutMs ?? CLAUDE_TIMEOUT_MS;
+
   // Save prompt to temp file for debugging (optional manual testing)
   const tempDir = process.env.TMPDIR || "/tmp";
   const tempFile = path.join(tempDir, `dillobot-sync-prompt-${Date.now()}.txt`);
   await fs.writeFile(tempFile, prompt, "utf-8");
   console.log(`   📁 Prompt saved to: ${tempFile} (${Math.round(prompt.length / 1024)}KB)`);
+  console.log(`   ⏱️  Timeout: ${formatElapsed(timeoutMs)}`);
 
   return new Promise((resolve, reject) => {
+    let resolved = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let progressInterval: ReturnType<typeof setInterval> | null = null;
+
     const claudeArgs: string[] = [
       "--print",  // Non-interactive mode, print response to stdout
     ];
@@ -143,16 +159,45 @@ async function askClaude(prompt: string, options?: {
       claudeArgs.push("--max-turns", String(options.maxTurns));
     }
 
-    // Spawn claude directly (no shell) - this passes the prompt as a raw argument
-    // without any shell interpretation of backticks, $, etc.
-    const proc = spawn("claude", [...claudeArgs, "--", prompt], {
+    // Spawn claude - prompt will be sent via stdin to handle large prompts
+    // Using "inherit" for stdin would block, so we use "pipe" and write manually
+    const proc = spawn("claude", claudeArgs, {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    // Cleanup temp file when done
+    // Cleanup function to remove temp file and clear intervals
     const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
       fs.unlink(tempFile).catch(() => {});
     };
+
+    // Kill process and reject with timeout error
+    const handleTimeout = () => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+
+      // Kill the process tree
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // Process may already be dead
+      }
+
+      process.stdout.write(`\r${" ".repeat(80)}\r`);
+      console.log(`   ⏱️  Claude Code timed out after ${formatElapsed(timeoutMs)}`);
+      reject(new Error(`Claude Code timed out after ${formatElapsed(timeoutMs)}`));
+    };
+
+    // Set timeout
+    timeoutId = setTimeout(handleTimeout, timeoutMs);
 
     const startTime = Date.now();
     let stdout = "";
@@ -164,7 +209,7 @@ async function askClaude(prompt: string, options?: {
     const progressChars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     let progressIndex = 0;
 
-    const progressInterval = setInterval(() => {
+    progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const sinceActivity = Date.now() - lastActivity;
       const spinner = progressChars[progressIndex % progressChars.length];
@@ -183,6 +228,7 @@ async function askClaude(prompt: string, options?: {
       process.stdout.write(`\r${status.padEnd(80)}`);
     }, 250);
 
+    // Attach stdout/stderr listeners before writing to stdin
     proc.stdout.on("data", (data) => {
       const chunk = data.toString();
       stdout += chunk;
@@ -201,7 +247,8 @@ async function askClaude(prompt: string, options?: {
     });
 
     proc.on("close", (code) => {
-      clearInterval(progressInterval);
+      if (resolved) return;
+      resolved = true;
       cleanup();
       const elapsed = Date.now() - startTime;
       // Clear the progress line
@@ -217,7 +264,8 @@ async function askClaude(prompt: string, options?: {
     });
 
     proc.on("error", (err) => {
-      clearInterval(progressInterval);
+      if (resolved) return;
+      resolved = true;
       cleanup();
       process.stdout.write(`\r${" ".repeat(80)}\r`);
       console.log(`   ❌ Failed to start Claude Code: ${err.message}`);
@@ -225,8 +273,14 @@ async function askClaude(prompt: string, options?: {
     });
 
     // Log process info for debugging
-    console.log(`   📍 Started shell process (PID: ${proc.pid})`);
-    console.log(`   💡 To check Claude: ps aux | grep claude`);
+    console.log(`   📍 Started Claude process (PID: ${proc.pid})`);
+
+    // Write prompt to stdin and close it to signal EOF
+    // This handles large prompts safely (no shell argument size limits)
+    if (proc.stdin) {
+      proc.stdin.write(prompt);
+      proc.stdin.end(); // Signal EOF so Claude knows input is complete
+    }
   });
 }
 
@@ -689,6 +743,222 @@ async function attemptAutoMerge(): Promise<{ success: boolean; conflicts: string
 }
 
 /**
+ * Merge a single security-critical file by having Claude generate the merged version
+ * that preserves DilloBot patches while accepting upstream changes.
+ */
+async function mergeSecurityFile(
+  file: string,
+  securityDoc: string,
+): Promise<{ success: boolean; error?: string }> {
+  console.log(`\n   📄 Merging security file: ${file}`);
+
+  // Get the current DilloBot version (ours)
+  let oursContent: string;
+  try {
+    oursContent = await fs.readFile(file, "utf-8");
+  } catch {
+    console.log(`      ⚠️  File doesn't exist in DilloBot: ${file}`);
+    return { success: true }; // New file from upstream, accept it
+  }
+
+  // Get the upstream version (theirs)
+  let theirsContent: string;
+  try {
+    theirsContent = run(`git show upstream/${UPSTREAM_BRANCH}:${file}`, { ignoreError: true });
+  } catch {
+    console.log(`      ⚠️  File doesn't exist in upstream: ${file}`);
+    return { success: true }; // DilloBot-only file, keep it
+  }
+
+  if (!theirsContent) {
+    console.log(`      ℹ️  File unchanged or not in upstream`);
+    return { success: true };
+  }
+
+  // If files are identical, no merge needed
+  if (oursContent === theirsContent) {
+    console.log(`      ✅ Files are identical, no merge needed`);
+    return { success: true };
+  }
+
+  // Extract the relevant section from security doc for this file
+  const fileSection = extractSecurityDocSection(securityDoc, file);
+
+  const prompt = `You are merging a security-critical file for DilloBot (a security-hardened fork of OpenClaw).
+
+FILE: ${file}
+
+DILLOBOT SECURITY REQUIREMENTS FOR THIS FILE:
+${fileSection || "See general security patches - all DilloBot-specific code must be preserved."}
+
+CURRENT DILLOBOT VERSION (must preserve security patches):
+\`\`\`typescript
+${oursContent.slice(0, 50000)}${oursContent.length > 50000 ? "\n// ... truncated" : ""}
+\`\`\`
+
+UPSTREAM OPENCLAW VERSION (new features/fixes to incorporate):
+\`\`\`typescript
+${theirsContent.slice(0, 50000)}${theirsContent.length > 50000 ? "\n// ... truncated" : ""}
+\`\`\`
+
+TASK: Generate the MERGED version that:
+1. Includes ALL upstream changes (new features, bug fixes, refactors)
+2. Preserves ALL DilloBot security patches and additions
+3. Resolves any conflicts by keeping BOTH (DilloBot additions + upstream changes)
+4. Maintains proper imports for both upstream and DilloBot code
+
+IMPORTANT:
+- Look for // DILLOBOT comments marking security-critical code
+- Keep all DilloBot-specific imports, types, and function calls
+- Accept upstream structural changes but add DilloBot patches on top
+
+Respond with ONLY the merged file content, no explanations or markdown. Start directly with the file content.`;
+
+  try {
+    const mergedContent = await askClaude(prompt, {
+      timeoutMs: 3 * 60 * 1000, // 3 minutes per file
+    });
+
+    // Validate the response looks like valid TypeScript
+    if (!mergedContent || mergedContent.length < 100) {
+      console.log(`      ❌ Claude returned empty or too-short response`);
+      return { success: false, error: "Empty response from Claude" };
+    }
+
+    // Write the merged content
+    await fs.writeFile(file, mergedContent, "utf-8");
+    run(`git add "${file}"`);
+    console.log(`      ✅ Merged successfully (${mergedContent.length} chars)`);
+    return { success: true };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.log(`      ❌ Failed to merge: ${errorMsg}`);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Extract the relevant section from SECURITY_PATCHES.md for a specific file
+ */
+function extractSecurityDocSection(securityDoc: string, file: string): string {
+  const lines = securityDoc.split("\n");
+  const sections: string[] = [];
+  let inRelevantSection = false;
+  let currentSection: string[] = [];
+
+  for (const line of lines) {
+    // Check if this line mentions the file
+    if (line.includes(file) || line.includes(path.basename(file))) {
+      inRelevantSection = true;
+    }
+
+    // Track section boundaries
+    if (line.startsWith("### ") || line.startsWith("## ")) {
+      if (inRelevantSection && currentSection.length > 0) {
+        sections.push(currentSection.join("\n"));
+      }
+      currentSection = [line];
+      inRelevantSection = line.includes(file) || line.includes(path.basename(file));
+    } else {
+      currentSection.push(line);
+    }
+  }
+
+  // Add last section if relevant
+  if (inRelevantSection && currentSection.length > 0) {
+    sections.push(currentSection.join("\n"));
+  }
+
+  return sections.join("\n\n---\n\n");
+}
+
+/**
+ * Perform a smart merge that accepts upstream changes and re-applies DilloBot patches
+ */
+async function smartMergeWithPatches(
+  securityFiles: string[],
+  securityDoc: string,
+): Promise<{ success: boolean; merged: string[]; failed: string[] }> {
+  console.log("\n🔧 Starting smart merge with security patch preservation...\n");
+
+  // Step 1: Start merge with upstream, accepting their changes for non-security files
+  console.log("   Step 1: Merging upstream (accepting theirs for conflicts)...");
+  try {
+    // Use -X theirs to accept upstream changes, then we'll re-apply our patches
+    run(`git merge upstream/${UPSTREAM_BRANCH} -X theirs --no-commit`, { ignoreError: true });
+  } catch {
+    // Merge might have conflicts even with -X theirs for some edge cases
+  }
+
+  // Check current status
+  const status = run("git status --porcelain", { ignoreError: true });
+  const hasConflicts = status.split("\n").some((line) => line.startsWith("UU"));
+
+  if (hasConflicts) {
+    console.log("   ⚠️  Some conflicts remain, resolving...");
+    // For any remaining conflicts, accept theirs first
+    const conflictFiles = status
+      .split("\n")
+      .filter((line) => line.startsWith("UU"))
+      .map((line) => line.slice(3).trim());
+
+    for (const file of conflictFiles) {
+      run(`git checkout --theirs "${file}"`, { ignoreError: true });
+      run(`git add "${file}"`, { ignoreError: true });
+    }
+  }
+
+  console.log("   ✅ Upstream changes applied\n");
+
+  // Step 2: Re-apply DilloBot patches to security-critical files
+  console.log("   Step 2: Re-applying DilloBot security patches...");
+
+  const merged: string[] = [];
+  const failed: string[] = [];
+
+  // First, restore our versions of security files from before the merge
+  for (const file of securityFiles) {
+    // Get our original content from before the merge
+    let ourOriginal: string;
+    try {
+      ourOriginal = run(`git show HEAD:${file}`, { ignoreError: true });
+    } catch {
+      continue; // File didn't exist in our version
+    }
+
+    if (!ourOriginal) continue;
+
+    // Get the current (upstream) content
+    let currentContent: string;
+    try {
+      currentContent = await fs.readFile(file, "utf-8");
+    } catch {
+      continue; // File doesn't exist
+    }
+
+    // If they're the same, no merge needed
+    if (ourOriginal === currentContent) {
+      console.log(`   ℹ️  ${file}: No changes from upstream`);
+      merged.push(file);
+      continue;
+    }
+
+    // Merge this file
+    const result = await mergeSecurityFile(file, securityDoc);
+    if (result.success) {
+      merged.push(file);
+    } else {
+      failed.push(file);
+    }
+  }
+
+  // Step 3: Remove any blocked files
+  await removeBlockedFiles();
+
+  return { success: failed.length === 0, merged, failed };
+}
+
+/**
  * Apply a resolved conflict
  */
 async function applyResolution(file: string, content: string): Promise<void> {
@@ -867,6 +1137,44 @@ async function syncWithUpstream(): Promise<SyncResult> {
       }
 
       // Abort if we couldn't resolve everything
+      run("git merge --abort", { ignoreError: true });
+    }
+  }
+
+  // Step 6: Try smart merge with patch preservation for security files
+  if (changedSecurityFiles.length > 0) {
+    console.log("\n🔧 Attempting smart merge with security patch preservation...");
+    const smartResult = await smartMergeWithPatches(changedSecurityFiles, securityDoc);
+
+    if (smartResult.success) {
+      // Verify security patches are intact
+      const verification = await verifySecurityPatches();
+      if (verification.valid) {
+        // Update README, website, install script, and version file before committing
+        await updateReadmeVersion();
+        await updateWebsiteVersion();
+        await copyInstallScripts();
+        await updateDilloBotVersionFile();
+        run('git commit -m "Merge upstream OpenClaw with DilloBot security patches (smart merge via Claude Code)"');
+        console.log("\n✅ Smart merge successful! All security patches preserved.\n");
+        return {
+          success: true,
+          action: "auto-merged",
+          summary: `Merged ${updates.commitCount} commits using smart merge. Preserved patches in ${smartResult.merged.length} security files.`,
+          appliedPatches: smartResult.merged,
+          upstreamChanges: updates.summary,
+        };
+      } else {
+        // Security patches damaged - rollback
+        console.log("❌ Security verification failed after smart merge. Issues:");
+        verification.issues.forEach((i) => console.log(`   - ${i}`));
+        run("git reset --hard HEAD", { ignoreError: true });
+        run("git merge --abort", { ignoreError: true });
+      }
+    } else if (smartResult.failed.length > 0) {
+      console.log(`\n❌ Smart merge failed for ${smartResult.failed.length} files:`);
+      smartResult.failed.forEach((f) => console.log(`   - ${f}`));
+      run("git reset --hard HEAD", { ignoreError: true });
       run("git merge --abort", { ignoreError: true });
     }
   }
